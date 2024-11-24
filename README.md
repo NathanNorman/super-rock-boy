@@ -38,6 +38,46 @@ A relaxing browser-based game where you control a rock doing rock things - like 
   - Clean stopping behavior
   - Different movement physics for ground vs air
 
+### [0.0.4] - 2024-03-19
+#### Added
+- Platform system:
+  - Multiple platforms at different heights
+  - Collision detection and landing mechanics
+  - Platform-to-platform jumping
+
+### [0.0.5] - 2024-03-19
+#### Added
+- Health system:
+  - Health bar UI
+  - Damage mechanics
+  - Spike obstacles
+  - Damage flash effect
+- Game Over system:
+  - Rock breaking animation
+  - Miner character game over screen
+  - Restart functionality
+
+### [0.0.6] - 2024-03-19
+#### Added
+- Evolution system:
+  - 5 rock stages (pebble → diamond)
+  - Level-based progression
+  - XP system with survival XP
+  - Evolution particle effects
+  - Different colors and sizes per evolution
+- Debug features:
+  - Debug panel with game stats
+  - Level up/down controls
+  - Panel toggle
+#### Improved
+- Health system:
+  - Health increases with evolution
+  - Immunity frames after damage
+- UI Layout:
+  - Fixed health bar position
+  - Added XP bar
+  - Evolution status display
+
 ## Getting Started
 
 ### Prerequisites
