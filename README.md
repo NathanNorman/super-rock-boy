@@ -14,6 +14,30 @@ A relaxing browser-based game where you control a rock doing rock things - like 
   - Random variations in shape on each load
 - Git version control initialization
 
+### [0.0.2] - 2024-03-19
+#### Added
+- Basic keyboard movement controls
+- Physics system with:
+  - Velocity and acceleration
+  - Maximum speed limits
+  - Friction for smooth deceleration
+  - Basic boundary collision
+
+### [0.0.3] - 2024-03-19
+#### Added
+- Natural rock physics:
+  - Gravity and jumping mechanics
+  - Ground collision with bounce effects
+  - Wall collision with bounce effects
+  - Natural rotation based on movement
+  - Smooth movement transitions
+#### Improved
+- Movement system now feels more "rocky":
+  - Rock rolls naturally when moving
+  - Rotation speed tied to velocity
+  - Clean stopping behavior
+  - Different movement physics for ground vs air
+
 ## Getting Started
 
 ### Prerequisites
@@ -66,13 +90,21 @@ super-rock-boy/
 ```
 
 ## Controls
-Coming soon! The game will feature both keyboard and trackpad controls optimized for MacBook Pro users.
+- Arrow Keys:
+  - Left/Right: Roll the rock
+  - Up: Jump
+- Movement features:
+  - Natural rolling motion based on velocity
+  - Air control (reduced movement speed while jumping)
+  - Bounce effects on hard landings
+  - Smooth deceleration to stop
 
 ## Current Status
-This is an early development version (0.0.1) with basic rock rendering complete. Features coming soon:
-- Rock movement and physics
-- Level design
-- Relaxing gameplay mechanics
+This is an early development version (0.0.3) with natural rock movement physics complete. Features coming soon:
+- Level design and obstacles
+- Collectibles and objectives
+- Background art and particles
+- Sound effects and music
 
 ## Contributing
 This is a fun, open project! Feel free to submit issues or pull requests.
