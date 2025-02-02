@@ -227,10 +227,31 @@ class Game {
         this.starRespawnTimer = 0;
         this.starRespawnDelay = 180; // 3 seconds at 60fps
         
+        // Initialize game music
+        this.music = new Audio('assets/audio/supa_rock_boy_game_music.mp3');
+        this.music.loop = true;
+        
+        // Setup music button
+        this.setupMusicButton();
+        
         // Initialize game
         this.init();
     }
     
+    setupMusicButton() {
+        const musicButton = document.getElementById('playMusic');
+        if (musicButton) {
+            musicButton.addEventListener('click', () => {
+                this.music.play()
+                    .then(() => {
+                        musicButton.textContent = 'Music Playing';
+                        musicButton.disabled = true;
+                    })
+                    .catch(e => console.warn('Audio play failed:', e));
+            });
+        }
+    }
+
     init() {
         // Add keyboard event listeners
         window.addEventListener('keydown', (e) => this.handleKeyDown(e));
@@ -1074,6 +1095,12 @@ class Game {
     }
 
     resetGame() {
+        // Only reset music if it's already playing
+        if (!this.music.paused) {
+            this.music.currentTime = 0;
+            this.music.play().catch(e => console.warn('Audio play failed:', e));
+        }
+        
         // Reset level and evolution
         this.level = {
             current: 1,
