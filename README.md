@@ -4,7 +4,7 @@ A relaxing browser-based game where you control a rock doing rock things - like 
 
 ## Changelog
 
-### [0.0.1] - 2024-03-19
+### [0.0.1] - 2024-11-23 10:00 EST
 #### Added
 - Basic project structure with HTML5 Canvas
 - Initial rock rendering with:
@@ -14,7 +14,7 @@ A relaxing browser-based game where you control a rock doing rock things - like 
   - Random variations in shape on each load
 - Git version control initialization
 
-### [0.0.2] - 2024-03-19
+### [0.0.2] - 2024-11-23 12:00 EST
 #### Added
 - Basic keyboard movement controls
 - Physics system with:
@@ -23,7 +23,7 @@ A relaxing browser-based game where you control a rock doing rock things - like 
   - Friction for smooth deceleration
   - Basic boundary collision
 
-### [0.0.3] - 2024-03-19
+### [0.0.3] - 2024-11-23 14:00 EST
 #### Added
 - Natural rock physics:
   - Gravity and jumping mechanics
@@ -38,14 +38,14 @@ A relaxing browser-based game where you control a rock doing rock things - like 
   - Clean stopping behavior
   - Different movement physics for ground vs air
 
-### [0.0.4] - 2024-03-19
+### [0.0.4] - 2024-11-23 16:00 EST
 #### Added
 - Platform system:
   - Multiple platforms at different heights
   - Collision detection and landing mechanics
   - Platform-to-platform jumping
 
-### [0.0.5] - 2024-03-19
+### [0.0.5] - 2024-11-23 18:00 EST
 #### Added
 - Health system:
   - Health bar UI
@@ -57,7 +57,7 @@ A relaxing browser-based game where you control a rock doing rock things - like 
   - Miner character game over screen
   - Restart functionality
 
-### [0.0.6] - 2024-03-19
+### [0.0.6] - 2024-11-23 20:30 EST
 #### Added
 - Evolution system:
   - 5 rock stages (pebble → diamond)
@@ -100,14 +100,28 @@ If you want to modify the code:
    git clone [repository-url]
    cd super-rock-boy
    ```
-2. Open the project folder in your preferred text editor
-3. Make your changes
-4. Commit your changes:
+2. Install dependencies:
    ```bash
-   git add .
-   git commit -m "Description of your changes"
+   npm install
    ```
-5. Refresh the browser to see updates
+3. Start the development server:
+   ```bash
+   npm start
+   ```
+4. Open your browser to `http://localhost:8080`
+5. Make your changes and refresh the browser to see updates
+
+### Running Tests
+```bash
+# Run tests once
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run tests with coverage report
+npm run test:coverage
+```
 
 ## Version Control
 This project uses Git for version control. Currently maintained as a local repository.
@@ -140,7 +154,14 @@ super-rock-boy/
   - Smooth deceleration to stop
 
 ## Current Status
-This is an early development version (0.0.3) with natural rock movement physics complete. Features coming soon:
+This is an early development version (0.0.6) with the following features complete:
+- Natural rock movement physics
+- Platform system
+- Health and damage system
+- Evolution system with 5 stages
+- Debug features
+
+Features coming soon:
 - Level design and obstacles
 - Collectibles and objectives
 - Background art and particles

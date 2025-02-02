@@ -1,0 +1,26 @@
+{
+  "name": "super-rock-boy",
+  "version": "0.0.6",
+  "description": "A relaxing browser-based game where you control a rock doing rock things",
+  "main": "js/game.js",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "start": "http-server . -p 8080 -c-1"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.24.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "http-server": "^14.1.1"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "moduleDirectories": ["node_modules", "js"],
+    "collectCoverageFrom": [
+      "js/**/*.js",
+      "!js/game.js"
+    ]
+  }
+} 

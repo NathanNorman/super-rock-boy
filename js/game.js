@@ -1,3 +1,5 @@
+import Health from './components/Health.js';
+
 class Game {
     constructor() {
         this.canvas = document.getElementById('gameCanvas');
@@ -14,8 +16,44 @@ class Game {
         this.canvas.width = 800;
         this.canvas.height = 600;
         
-        // Define base properties first
-        this.baseRadius = 20;  // Base size for the rock
+        // Set level bounds BEFORE creating background
+        this.levelBounds = {
+            width: this.canvas.width * 3,  // Three screens wide
+            height: this.canvas.height
+        };
+        
+        // Define base properties
+        this.baseRadius = 20;
+        
+        // Create camera
+        this.camera = {
+            x: 0,
+            y: 0,
+            width: this.canvas.width,
+            height: this.canvas.height,
+            followSpeed: 0.1
+        };
+        
+        // NOW create background with mountains
+        this.background = {
+            layers: [
+                {
+                    color: '#4B617A',
+                    points: this.generateMountainPoints(3, 0.3),
+                    parallaxFactor: 0.2
+                },
+                {
+                    color: '#445469',
+                    points: this.generateMountainPoints(4, 0.5),
+                    parallaxFactor: 0.4
+                },
+                {
+                    color: '#3A4757',
+                    points: this.generateMountainPoints(5, 0.7),
+                    parallaxFactor: 0.6
+                }
+            ]
+        };
         
         // Create rock first since other systems depend on it
         this.rock = {
@@ -54,13 +92,13 @@ class Game {
         
         // Define platforms array
         this.platforms = [
-            // Starting with 3 test platforms at different heights
+            // Starting area
             {
                 x: 100,
                 y: this.canvas.height - 200,
                 width: 200,
                 height: 20,
-                color: '#654321'  // Brown color for platforms
+                color: '#654321'
             },
             {
                 x: 400,
@@ -69,9 +107,39 @@ class Game {
                 height: 20,
                 color: '#654321'
             },
+            // Middle section
             {
-                x: 600,
-                y: this.canvas.height - 150,
+                x: 800,
+                y: this.canvas.height - 250,
+                width: 200,
+                height: 20,
+                color: '#654321'
+            },
+            {
+                x: 1100,
+                y: this.canvas.height - 350,
+                width: 200,
+                height: 20,
+                color: '#654321'
+            },
+            {
+                x: 1400,
+                y: this.canvas.height - 200,
+                width: 200,
+                height: 20,
+                color: '#654321'
+            },
+            // Final section
+            {
+                x: 1700,
+                y: this.canvas.height - 300,
+                width: 200,
+                height: 20,
+                color: '#654321'
+            },
+            {
+                x: 2000,
+                y: this.canvas.height - 400,
                 width: 200,
                 height: 20,
                 color: '#654321'
@@ -80,17 +148,20 @@ class Game {
         
         // Add spikes array
         this.spikes = [
-            this.placeSpike(300),  // Ground spike
-            this.placeSpike(500, this.canvas.height - 300)  // Platform spike
+            // Ground spikes
+            this.placeSpike(300),
+            this.placeSpike(700),
+            this.placeSpike(1200),
+            this.placeSpike(1800),
+            // Platform spikes
+            this.placeSpike(500, this.canvas.height - 300),
+            this.placeSpike(1150, this.canvas.height - 350),
+            this.placeSpike(1450, this.canvas.height - 200),
+            this.placeSpike(2050, this.canvas.height - 400)
         ];
         
         // Add health properties
-        this.health = {
-            current: 100,
-            max: 100,
-            damageFlashTime: 0,
-            isGameOver: false
-        };
+        this.health = new Health(this);
         
         // Add to the constructor after health properties
         this.level = {
@@ -126,6 +197,15 @@ class Game {
                 width: 190,
                 height: 120,
                 color: 'rgba(0, 0, 0, 0.7)'
+            },
+            levelChange: {
+                speed: 0,
+                maxSpeed: 5, // Increased max speed
+                acceleration: 0.1, // Increased acceleration
+                deceleration: 0.2, // Added deceleration for better control
+                active: false,
+                direction: 0, // -1 for down, 1 for up
+                lastUpdate: 0 // Track last update time for smoother changes
             }
         };
         
@@ -164,10 +244,12 @@ class Game {
         if (this.debug.enabled) {
             switch(e.key) {
                 case '[': // Level down
-                    this.debugLevelDown();
+                    this.debug.levelChange.active = true;
+                    this.debug.levelChange.direction = -1;
                     break;
                 case ']': // Level up
-                    this.debugLevelUp();
+                    this.debug.levelChange.active = true;
+                    this.debug.levelChange.direction = 1;
                     break;
                 case '\\': // Toggle debug panel
                     this.toggleDebugPanel();
@@ -197,6 +279,16 @@ class Game {
     }
 
     handleKeyUp(e) {
+        if (this.debug.enabled) {
+            switch(e.key) {
+                case '[':
+                case ']':
+                    this.debug.levelChange.active = false;
+                    this.debug.levelChange.speed = 0;
+                    break;
+            }
+        }
+        
         switch(e.key) {
             case 'ArrowLeft':
                 this.keys.left = false;
@@ -336,13 +428,13 @@ class Game {
         if (this.rock.x - this.baseRadius < 0) {
             this.rock.x = this.baseRadius;
             this.rock.velocityX = Math.abs(this.rock.velocityX) * 0.5;
-        } else if (this.rock.x + this.baseRadius > this.canvas.width) {
-            this.rock.x = this.canvas.width - this.baseRadius;
+        } else if (this.rock.x + this.baseRadius > this.levelBounds.width) {
+            this.rock.x = this.levelBounds.width - this.baseRadius;
             this.rock.velocityX = -Math.abs(this.rock.velocityX) * 0.5;
         }
 
         // Add rotation on wall bounces
-        if (this.rock.x - this.baseRadius < 0 || this.rock.x + this.baseRadius > this.canvas.width) {
+        if (this.rock.x - this.baseRadius < 0 || this.rock.x + this.baseRadius > this.levelBounds.width) {
             this.rock.rotationVelocity *= -0.8; // Reverse some of the rotation on wall hits
         }
 
@@ -372,17 +464,11 @@ class Game {
                 this.rock.y + this.rock.baseRadius > spike.y &&
                 this.rock.y - this.rock.baseRadius < spike.y + spike.height) {
                 
-                this.health.current -= 20; // Damage amount
-                this.health.damageFlashTime = 30; // Flash frames
+                this.health.takeDamage(20); // Damage amount
                 
                 // Bounce away from spike
                 this.rock.velocityY = this.physics.jumpForce * 0.7;
                 this.rock.velocityX = (this.rock.x < spike.x + spike.width/2) ? -8 : 8;
-                
-                if (this.health.current <= 0) {
-                    this.health.isGameOver = true;
-                    this.startRockBreakAnimation();
-                }
             }
         });
 
@@ -422,20 +508,25 @@ class Game {
             this.star.y += this.star.velocityY;
             this.star.rotation += 0.1;
             
-            // Bounce off walls and ground
-            if (this.star.x < 20 || this.star.x > this.canvas.width - 20) {
+            // Bounce off walls and ground with sparkle effect
+            if (this.star.x < 20 || this.star.x > this.levelBounds.width - 20) {
                 this.star.velocityX *= -1;
+                this.createStarBounceEffect(this.star.x, this.star.y);
             }
             if (this.star.y < 20 || this.star.y > this.physics.groundY - 20) {
                 this.star.velocityY *= -1;
+                this.createStarBounceEffect(this.star.x, this.star.y);
             }
             
-            // Add trail particle
+            // Add rainbow trail particle with more variation
+            const hue = (Date.now() / 20) % 360; // Cycling rainbow effect
             this.star.trail.unshift({
                 x: this.star.x,
                 y: this.star.y,
-                color: `hsl(${Math.random() * 360}, 100%, 50%)`,
-                life: 20
+                color: `hsl(${hue}, 100%, 70%)`,
+                size: 2 + Math.random() * 2,
+                life: 20,
+                alpha: 1
             });
             
             // Limit trail length
@@ -446,6 +537,7 @@ class Game {
             // Update trail particles
             this.star.trail.forEach(particle => {
                 particle.life--;
+                particle.alpha = particle.life / 20;
             });
             this.star.trail = this.star.trail.filter(particle => particle.life > 0);
             
@@ -456,9 +548,14 @@ class Game {
             
             if (distance < this.rock.baseRadius + this.star.size) {
                 this.star.collected = true;
-                this.debugLevelUp(); // Use existing level up function
+                this.level.xp += 50; // Give XP for collecting star
                 this.startStarCollectEffect();
                 this.starRespawnTimer = this.starRespawnDelay;
+                
+                // Check for level up
+                if (this.level.xp >= this.level.xpToNext) {
+                    this.levelUp();
+                }
             }
         }
 
@@ -502,6 +599,63 @@ class Game {
             }
             return; // Skip other updates during win sequence
         }
+
+        // Add to update method before other updates
+        this.updateCamera();
+        
+        // Update level change with improved control
+        if (this.debug.enabled && this.debug.levelChange.active) {
+            // Accelerate
+            this.debug.levelChange.speed = Math.min(
+                this.debug.levelChange.maxSpeed,
+                this.debug.levelChange.speed + this.debug.levelChange.acceleration
+            );
+            
+            // Only update level on certain frames based on speed
+            const now = Date.now();
+            const updateDelay = Math.max(50, 200 - (this.debug.levelChange.speed * 30));
+            
+            if (now - this.debug.levelChange.lastUpdate > updateDelay) {
+                const newLevel = Math.max(1, Math.min(100, 
+                    this.level.current + this.debug.levelChange.direction
+                ));
+                
+                if (newLevel !== this.level.current) {
+                    this.level.current = newLevel;
+                    
+                    // Update evolution based on new level
+                    for (const [stage, data] of Object.entries(this.level.stages)) {
+                        if (this.level.current >= data.minLevel) {
+                            if (this.level.evolution !== stage) {
+                                this.level.evolution = stage;
+                                this.startEvolutionAnimation();
+                            }
+                        }
+                    }
+                    
+                    // Update rock properties with proper scaling
+                    const evolutionData = this.level.stages[this.level.evolution];
+                    const levelScale = 1 + (this.level.current * 0.05); // 5% size increase per level
+                    
+                    this.rock.baseRadius = this.baseRadius * levelScale * evolutionData.strength;
+                    this.rock.points = this.generateRockPoints();
+                    this.rock.details = this.generateRockDetails();
+                    
+                    // Update health scaling
+                    this.health.max = 100 * evolutionData.strength * levelScale;
+                    this.health.current = this.health.max;
+                }
+                
+                this.debug.levelChange.lastUpdate = now;
+            }
+        } else {
+            // Decelerate when not active
+            this.debug.levelChange.speed = Math.max(0,
+                this.debug.levelChange.speed - this.debug.levelChange.deceleration
+            );
+        }
+        
+        this.health.update();
     }
     
     generateRockPoints(numPoints = 12) {
@@ -542,17 +696,86 @@ class Game {
         // Clear the canvas
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
-        // Draw ground
-        this.ctx.fillStyle = '#553311';
-        this.ctx.fillRect(0, this.physics.groundY, this.canvas.width, this.canvas.height - this.physics.groundY);
+        // Save the context state
+        this.ctx.save();
         
-        // Draw platforms
+        // Apply camera transform
+        this.ctx.translate(this.camera.x, this.camera.y);
+        
+        // Draw parallax background
+        this.ctx.save();
+        
+        // Draw sky gradient
+        const skyGradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+        skyGradient.addColorStop(0, '#1e3c72');
+        skyGradient.addColorStop(1, '#2a5298');
+        this.ctx.fillStyle = skyGradient;
+        this.ctx.fillRect(-this.camera.x, -this.camera.y, this.canvas.width, this.canvas.height);
+        
+        // Draw each mountain layer with parallax effect
+        this.background.layers.forEach(layer => {
+            this.ctx.beginPath();
+            const parallaxOffset = this.camera.x * layer.parallaxFactor;
+            
+            // Move to first point
+            this.ctx.moveTo(
+                layer.points[0].x - parallaxOffset,
+                layer.points[0].y
+            );
+            
+            // Draw through all points
+            layer.points.forEach(point => {
+                this.ctx.lineTo(
+                    point.x - parallaxOffset,
+                    point.y
+                );
+            });
+            
+            this.ctx.fillStyle = layer.color;
+            this.ctx.fill();
+        });
+        
+        this.ctx.restore();
+        
+        // Draw ground
+        const groundGradient = this.ctx.createLinearGradient(
+            0, 
+            this.physics.groundY - 20, 
+            0, 
+            this.physics.groundY + 50
+        );
+        groundGradient.addColorStop(0, '#8B4513'); // Darker brown at top
+        groundGradient.addColorStop(0.4, '#A0522D'); // Medium brown
+        groundGradient.addColorStop(1, '#6B4423'); // Darker brown at bottom
+
+        this.ctx.fillStyle = groundGradient;
+        this.ctx.fillRect(
+            -this.camera.x, // Adjust for camera position
+            this.physics.groundY,
+            this.levelBounds.width, // Make ground span entire level
+            50 // Ground height
+        );
+
+        // Add some ground details
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+        for (let x = 0; x < this.levelBounds.width; x += 50) {
+            const detailWidth = 20 + Math.random() * 30;
+            const detailHeight = 2 + Math.random() * 4;
+            this.ctx.fillRect(
+                x - this.camera.x,
+                this.physics.groundY,
+                detailWidth,
+                detailHeight
+            );
+        }
+        
+        // Draw platforms (they'll move with camera)
         this.platforms.forEach(platform => {
             this.ctx.fillStyle = platform.color;
             this.ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
         });
         
-        // Draw spikes
+        // Draw spikes (they'll move with camera)
         this.spikes.forEach(spike => {
             this.ctx.fillStyle = spike.color;
             this.ctx.beginPath();
@@ -562,8 +785,59 @@ class Game {
             this.ctx.closePath();
             this.ctx.fill();
         });
-
-        // Only draw the main rock if the game isn't over
+        
+        // Draw star and its trail
+        if (!this.star.collected) {
+            // Draw trail first (so it appears behind the star)
+            this.star.trail.forEach((particle, index) => {
+                const alpha = particle.life / 20; // Fade out based on life
+                this.ctx.fillStyle = `${particle.color}${Math.floor(alpha * 255).toString(16).padStart(2, '0')}`;
+                this.ctx.beginPath();
+                this.ctx.arc(particle.x, particle.y, 3, 0, Math.PI * 2);
+                this.ctx.fill();
+            });
+            
+            // Draw the star
+            this.ctx.save();
+            this.ctx.translate(this.star.x, this.star.y);
+            this.ctx.rotate(this.star.rotation);
+            
+            // Star shape
+            this.ctx.beginPath();
+            for (let i = 0; i < 5; i++) {
+                const angle = (i * 4 * Math.PI) / 5;
+                const x = Math.cos(angle) * this.star.size;
+                const y = Math.sin(angle) * this.star.size;
+                if (i === 0) {
+                    this.ctx.moveTo(x, y);
+                } else {
+                    this.ctx.lineTo(x, y);
+                }
+            }
+            this.ctx.closePath();
+            
+            // Star gradient
+            const starGradient = this.ctx.createRadialGradient(0, 0, 0, 0, 0, this.star.size);
+            starGradient.addColorStop(0, '#FFD700');  // Gold center
+            starGradient.addColorStop(1, '#FFA500');  // Orange edge
+            this.ctx.fillStyle = starGradient;
+            this.ctx.fill();
+            
+            this.ctx.restore();
+        }
+        
+        // Draw star collect particles if they exist
+        if (this.starCollectParticles) {
+            this.starCollectParticles.forEach(particle => {
+                const alpha = particle.life / 60;
+                this.ctx.fillStyle = `${particle.color}${Math.floor(alpha * 255).toString(16).padStart(2, '0')}`;
+                this.ctx.beginPath();
+                this.ctx.arc(particle.x, particle.y, 3, 0, Math.PI * 2);
+                this.ctx.fill();
+            });
+        }
+        
+        // Draw the rock (now stays centered)
         if (!this.health.isGameOver) {
             // Save the current context state
             this.ctx.save();
@@ -628,287 +902,157 @@ class Game {
             this.ctx.restore();
         }
 
-        // Draw health bar (now outside the rotated context)
-        // Move it to upper right corner with padding
-        const healthBarWidth = 150;
-        const healthBarHeight = 15;
-        const padding = 10;
+        // Restore context before drawing UI
+        this.ctx.restore();
         
-        // Background of health bar
-        this.ctx.fillStyle = '#333';
-        this.ctx.fillRect(
-            this.canvas.width - healthBarWidth - padding, 
-            padding, 
-            healthBarWidth, 
-            healthBarHeight
-        );
+        // Draw Health Bar
+        this.health.draw(this.ctx);
         
-        // Health bar fill
-        this.ctx.fillStyle = '#00FF00';
-        this.ctx.fillRect(
-            this.canvas.width - healthBarWidth - padding,
-            padding,
-            (this.health.current / this.health.max) * healthBarWidth,
-            healthBarHeight
-        );
-
-        // Level and XP display
-        const levelX = 10;
-        const levelY = 10;
-        this.ctx.fillStyle = '#FFFFFF';
+        // Draw XP Bar
+        const xpBarWidth = 200;
+        const xpBarHeight = 10;
+        const xpX = 10;
+        const xpY = 40;
+        
+        // XP Background
+        this.ctx.fillStyle = '#444';
+        this.ctx.fillRect(xpX, xpY, xpBarWidth, xpBarHeight);
+        
+        // XP Fill
+        const xpPercent = this.level.xp / this.level.xpToNext;
+        this.ctx.fillStyle = '#4169E1';  // Royal Blue
+        this.ctx.fillRect(xpX, xpY, xpBarWidth * xpPercent, xpBarHeight);
+        
+        // XP Border
+        this.ctx.strokeStyle = '#000';
+        this.ctx.strokeRect(xpX, xpY, xpBarWidth, xpBarHeight);
+        
+        // Evolution Status
+        this.ctx.fillStyle = '#FFF';
         this.ctx.font = '16px Arial';
-        this.ctx.textAlign = 'left';
-        this.ctx.fillText(`Level ${this.level.current} ${this.level.evolution}`, levelX, levelY + 15);
-
-        // XP Bar
-        const xpBarWidth = 150;
-        const xpBarHeight = 5;
-        this.ctx.fillStyle = '#333';
-        this.ctx.fillRect(levelX, levelY + 20, xpBarWidth, xpBarHeight);
-        this.ctx.fillStyle = '#FFD700';
-        this.ctx.fillRect(levelX, levelY + 20, 
-            (this.level.xp / this.level.xpToNext) * xpBarWidth, xpBarHeight);
-
-        // Draw evolution particles
-        if (this.evolutionParticles) {
-            this.evolutionParticles.forEach(particle => {
+        this.ctx.fillText(
+            `Evolution: ${this.level.evolution.charAt(0).toUpperCase() + this.level.evolution.slice(1)}`,
+            xpX, xpY + 30
+        );
+        this.ctx.fillText(`Level: ${this.level.current}`, xpX + 150, xpY + 30);
+        
+        // Debug Panel
+        if (this.debug.enabled) {
+            // Panel background
+            this.ctx.fillStyle = this.debug.panel.color;
+            this.ctx.fillRect(
+                this.debug.panel.x,
+                this.debug.panel.y,
+                this.debug.panel.width,
+                this.debug.panel.height
+            );
+            
+            // Debug info
+            this.ctx.fillStyle = '#FFF';
+            this.ctx.font = '12px Arial';
+            this.ctx.fillText(`FPS: ${Math.round(60)}`, this.debug.panel.x + 10, this.debug.panel.y + 20);
+            this.ctx.fillText(`Position: (${Math.round(this.rock.x)}, ${Math.round(this.rock.y)})`, this.debug.panel.x + 10, this.debug.panel.y + 40);
+            this.ctx.fillText(`Velocity: (${this.rock.velocityX.toFixed(2)}, ${this.rock.velocityY.toFixed(2)})`, this.debug.panel.x + 10, this.debug.panel.y + 60);
+            this.ctx.fillText(`Grounded: ${this.rock.isGrounded}`, this.debug.panel.x + 10, this.debug.panel.y + 80);
+            this.ctx.fillText(`Can Jump: ${this.rock.canJump}`, this.debug.panel.x + 10, this.debug.panel.y + 100);
+        }
+        
+        // Game Over Screen
+        if (this.health.isGameOver) {
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            
+            this.ctx.fillStyle = '#FFF';
+            this.ctx.font = '48px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('Game Over', this.canvas.width/2, this.canvas.height/2);
+            
+            this.ctx.font = '24px Arial';
+            this.ctx.fillText('Press SPACE to restart', this.canvas.width/2, this.canvas.height/2 + 50);
+            
+            this.ctx.textAlign = 'left'; // Reset text alignment
+        }
+        
+        // Win Screen
+        if (this.winScreen?.active) {
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            
+            // Draw particles
+            this.winScreen.particles.forEach(particle => {
                 this.ctx.fillStyle = particle.color;
-                this.ctx.globalAlpha = particle.life / 60;
                 this.ctx.beginPath();
                 this.ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
                 this.ctx.fill();
             });
-            this.ctx.globalAlpha = 1;
-        }
-
-        // Draw game over screen if needed
-        if (this.health.isGameOver) {
-            // Draw breaking rock animation if pieces exist
-            if (this.rockPieces) {
-                this.rockPieces.forEach(piece => {
-                    piece.x += piece.velocityX;
-                    piece.y += piece.velocityY;
-                    piece.velocityY += 0.2; // Gravity
-                    piece.rotation += 0.1;
-
-                    this.ctx.save();
-                    this.ctx.translate(piece.x, piece.y);
-                    this.ctx.rotate(piece.rotation);
-                    this.ctx.fillStyle = '#808080';
-                    this.ctx.beginPath();
-                    this.ctx.arc(0, 0, piece.size, 0, Math.PI * 2);
-                    this.ctx.fill();
-                    this.ctx.restore();
-                });
-            }
-
-            // Draw game over screen
-            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
             
-            // Draw miner character
-            const minerY = this.canvas.height / 2;
-            const minerX = this.canvas.width/2;
-            this.ctx.strokeStyle = '#FFD700';
-            this.ctx.lineWidth = 3;
-
-            // Head
-            this.ctx.beginPath();
-            this.ctx.arc(minerX, minerY - 45, 15, 0, Math.PI * 2);
-            this.ctx.stroke();
-
-            // Hard hat
-            this.ctx.beginPath();
-            this.ctx.arc(minerX, minerY - 50, 18, Math.PI, Math.PI * 2);
-            this.ctx.stroke();
-            // Hat brim
-            this.ctx.beginPath();
-            this.ctx.moveTo(minerX - 20, minerY - 50);
-            this.ctx.lineTo(minerX + 20, minerY - 50);
-            this.ctx.stroke();
-
-            // Body
-            this.ctx.beginPath();
-            this.ctx.moveTo(minerX, minerY - 30);
-            this.ctx.lineTo(minerX, minerY + 30);
-            this.ctx.stroke();
-
-            // Arms
-            // Left arm holding pickaxe
-            this.ctx.beginPath();
-            this.ctx.moveTo(minerX, minerY - 10);
-            this.ctx.lineTo(minerX - 30, minerY - 30);
-            // Right arm
-            this.ctx.moveTo(minerX, minerY - 10);
-            this.ctx.lineTo(minerX + 25, minerY - 20);
-            this.ctx.stroke();
-
-            // Pickaxe
-            this.ctx.beginPath();
-            // Handle
-            this.ctx.moveTo(minerX - 30, minerY - 30);
-            this.ctx.lineTo(minerX - 60, minerY - 40);
-            // Head of pickaxe
-            this.ctx.lineTo(minerX - 70, minerY - 50); // Top point
-            this.ctx.moveTo(minerX - 60, minerY - 40);
-            this.ctx.lineTo(minerX - 70, minerY - 30); // Bottom point
-            this.ctx.stroke();
-
-            // Legs
-            this.ctx.beginPath();
-            this.ctx.moveTo(minerX, minerY + 30);
-            this.ctx.lineTo(minerX - 20, minerY + 60);
-            this.ctx.moveTo(minerX, minerY + 30);
-            this.ctx.lineTo(minerX + 20, minerY + 60);
-            this.ctx.stroke();
-
-            // Boots
-            this.ctx.beginPath();
-            this.ctx.moveTo(minerX - 20, minerY + 60);
-            this.ctx.lineTo(minerX - 25, minerY + 60);
-            this.ctx.moveTo(minerX + 20, minerY + 60);
-            this.ctx.lineTo(minerX + 25, minerY + 60);
-            this.ctx.stroke();
-
-            // Game Over Text (moved slightly up to make room for the full miner)
-            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.fillStyle = '#FFF';
             this.ctx.font = '48px Arial';
             this.ctx.textAlign = 'center';
-            this.ctx.fillText('Game Over', this.canvas.width/2, minerY - 120);
-            this.ctx.font = '24px Arial';
-            this.ctx.fillText('Press Space to Try Again', this.canvas.width/2, minerY + 100);
+            this.ctx.fillText(this.winScreen.message, this.canvas.width/2, this.canvas.height/2);
             
-            return; // Don't draw the regular game
-        }
-
-        // Draw debug panel
-        if (this.debug.enabled) {
-            const panel = this.debug.panel;
-            
-            // Panel background
-            this.ctx.fillStyle = panel.color;
-            this.ctx.fillRect(panel.x, panel.y, panel.width, panel.height);
-            
-            // Debug info text
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = '12px Monospace';
-            this.ctx.textAlign = 'left';
-            
-            const debugInfo = [
-                `Level: ${this.level.current}`,
-                `Evolution: ${this.level.evolution}`,
-                `XP: ${Math.floor(this.level.xp)}/${this.level.xpToNext}`,
-                `Health: ${Math.floor(this.health.current)}/${this.health.max}`,
-                '',
-                'Controls:',
-                '[: Level Down',
-                ']: Level Up',
-                '\\: Toggle Panel'
-            ];
-            
-            debugInfo.forEach((text, i) => {
-                this.ctx.fillText(text, panel.x + 5, panel.y + 15 + (i * 13));
-            });
-        }
-
-        // Draw star and its trail
-        if (!this.star.collected) {
-            // Draw trail
-            this.star.trail.forEach((particle, index) => {
-                this.ctx.fillStyle = particle.color;
-                this.ctx.globalAlpha = particle.life / 20;
-                this.ctx.beginPath();
-                this.ctx.arc(particle.x, particle.y, 3, 0, Math.PI * 2);
-                this.ctx.fill();
-            });
-            this.ctx.globalAlpha = 1;
-            
-            // Draw star
-            this.ctx.save();
-            this.ctx.translate(this.star.x, this.star.y);
-            this.ctx.rotate(this.star.rotation);
-            
-            // Draw 5-pointed star
-            this.ctx.beginPath();
-            for (let i = 0; i < 5; i++) {
-                const angle = (i * 4 * Math.PI) / 5;
-                const x = Math.cos(angle) * this.star.size;
-                const y = Math.sin(angle) * this.star.size;
-                if (i === 0) {
-                    this.ctx.moveTo(x, y);
-                } else {
-                    this.ctx.lineTo(x, y);
-                }
+            if (this.winScreen.gameComplete) {
+                this.ctx.font = '24px Arial';
+                this.ctx.fillText('Press SPACE to play again', this.canvas.width/2, this.canvas.height/2 + 50);
             }
-            this.ctx.closePath();
             
-            // Star gradient
-            const gradient = this.ctx.createRadialGradient(0, 0, 0, 0, 0, this.star.size);
-            gradient.addColorStop(0, '#FFFFFF');
-            gradient.addColorStop(0.5, '#FFD700');
-            gradient.addColorStop(1, '#FFA500');
-            this.ctx.fillStyle = gradient;
-            this.ctx.fill();
-            
-            // Star shimmer
-            this.ctx.strokeStyle = '#FFFFFF';
-            this.ctx.lineWidth = 2;
-            this.ctx.stroke();
-            
-            this.ctx.restore();
+            this.ctx.textAlign = 'left'; // Reset text alignment
         }
 
-        // Draw star collect particles if they exist
-        if (this.starCollectParticles) {
-            this.starCollectParticles.forEach((particle, index) => {
+        // Draw star effects (bounce particles)
+        if (this.starEffects) {
+            this.starEffects.forEach((particle, index) => {
                 particle.x += particle.velocityX;
                 particle.y += particle.velocityY;
                 particle.life--;
                 
-                this.ctx.fillStyle = particle.color;
-                this.ctx.globalAlpha = particle.life / 60;
-                this.ctx.beginPath();
-                this.ctx.arc(particle.x, particle.y, 3, 0, Math.PI * 2);
-                this.ctx.fill();
-            });
-            this.ctx.globalAlpha = 1;
-            
-            // Remove finished particles
-            this.starCollectParticles = this.starCollectParticles.filter(p => p.life > 0);
-            if (this.starCollectParticles.length === 0) {
-                this.starCollectParticles = null;
-            }
-        }
-
-        // Add to draw method before debug panel
-        if (this.winScreen?.active) {
-            // Fade background
-            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-            
-            // Draw celebration particles
-            this.winScreen.particles.forEach(particle => {
-                this.ctx.fillStyle = particle.color;
-                this.ctx.globalAlpha = particle.life / 120;
+                const alpha = particle.life / 15;
+                this.ctx.fillStyle = `${particle.color}${Math.floor(alpha * 255).toString(16).padStart(2, '0')}`;
                 this.ctx.beginPath();
                 this.ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
                 this.ctx.fill();
             });
-            this.ctx.globalAlpha = 1;
             
-            // Draw win message
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = '48px Arial';
-            this.ctx.textAlign = 'center';
-            this.ctx.fillText('You Win!', this.canvas.width/2, this.canvas.height/2 - 50);
-            this.ctx.font = '24px Arial';
-            this.ctx.fillText(this.winScreen.message, this.canvas.width/2, this.canvas.height/2 + 10);
+            this.starEffects = this.starEffects.filter(particle => particle.life > 0);
+        }
+
+        // Draw star collection particles with enhanced effects
+        if (this.starCollectParticles) {
+            this.starCollectParticles.forEach(particle => {
+                particle.x += particle.velocityX;
+                particle.y += particle.velocityY;
+                particle.life--;
+                particle.alpha = particle.life / (particle.isSparkle ? 90 : 60);
+                
+                if (particle.isSparkle) {
+                    // Draw sparkles
+                    const flicker = 0.7 + Math.random() * 0.3;
+                    this.ctx.fillStyle = `${particle.color}${Math.floor(particle.alpha * 255 * flicker).toString(16).padStart(2, '0')}`;
+                    this.ctx.beginPath();
+                    this.ctx.arc(particle.x, particle.y, particle.size * flicker, 0, Math.PI * 2);
+                    this.ctx.fill();
+                } else {
+                    // Draw burst particles
+                    particle.rotation += particle.rotationSpeed;
+                    this.ctx.save();
+                    this.ctx.translate(particle.x, particle.y);
+                    this.ctx.rotate(particle.rotation);
+                    
+                    this.ctx.fillStyle = `${particle.color}${Math.floor(particle.alpha * 255).toString(16).padStart(2, '0')}`;
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(0, -particle.size);
+                    this.ctx.lineTo(particle.size * 0.5, particle.size * 0.5);
+                    this.ctx.lineTo(-particle.size * 0.5, particle.size * 0.5);
+                    this.ctx.closePath();
+                    this.ctx.fill();
+                    
+                    this.ctx.restore();
+                }
+            });
             
-            // Change message based on game completion
-            if (this.winScreen.gameComplete) {
-                this.ctx.fillText('Press Space to Play Again', this.canvas.width/2, this.canvas.height/2 + 50);
-            } else {
-                this.ctx.fillText('Next Level Coming Soon...', this.canvas.width/2, this.canvas.height/2 + 50);
+            this.starCollectParticles = this.starCollectParticles.filter(particle => particle.life > 0);
+            if (this.starCollectParticles.length === 0) {
+                this.starCollectParticles = null;
             }
         }
     }
@@ -939,13 +1083,8 @@ class Game {
             stages: this.level.stages  // Keep the stage definitions
         };
 
-        // Reset health
-        this.health = {
-            current: 100,
-            max: 100,
-            damageFlashTime: 0,
-            isGameOver: false
-        };
+        // Reset health - create new Health instance instead of plain object
+        this.health = new Health(this);
 
         // Reset rock
         this.rock = {
@@ -1112,19 +1251,42 @@ class Game {
 
     // Add new method for star collection effect
     startStarCollectEffect() {
+        const numParticles = 40; // Increased number of particles
         this.starCollectParticles = [];
-        const numParticles = 30;
         
+        // Burst particles
         for (let i = 0; i < numParticles; i++) {
             const angle = (i / numParticles) * Math.PI * 2;
-            const speed = 2 + Math.random() * 3;
+            const speed = 2 + Math.random() * 5; // More varied speed
+            const size = 2 + Math.random() * 3; // Varied sizes
             this.starCollectParticles.push({
                 x: this.star.x,
                 y: this.star.y,
                 velocityX: Math.cos(angle) * speed,
                 velocityY: Math.sin(angle) * speed,
-                color: `hsl(${(i / numParticles) * 360}, 100%, 50%)`,
-                life: 60 + Math.random() * 20
+                color: `hsl(${(i / numParticles) * 360}, 100%, 70%)`,
+                size: size,
+                life: 45 + Math.random() * 30,
+                alpha: 1,
+                rotation: Math.random() * Math.PI * 2,
+                rotationSpeed: (Math.random() - 0.5) * 0.2
+            });
+        }
+        
+        // Add some sparkles that linger
+        for (let i = 0; i < 20; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 0.5 + Math.random() * 2;
+            this.starCollectParticles.push({
+                x: this.star.x,
+                y: this.star.y,
+                velocityX: Math.cos(angle) * speed,
+                velocityY: Math.sin(angle) * speed,
+                color: '#FFD700',
+                size: 1 + Math.random() * 2,
+                life: 60 + Math.random() * 30,
+                alpha: 1,
+                isSparkle: true
             });
         }
     }
@@ -1200,6 +1362,61 @@ class Game {
                 color: this.level.stages[this.level.evolution].color
             });
         }
+    }
+
+    // Add new method for camera update
+    updateCamera() {
+        // Target is center of screen minus player position
+        const targetX = this.canvas.width/2 - this.rock.x;
+        const targetY = this.canvas.height/2 - this.rock.y;
+        
+        // Smooth camera movement
+        this.camera.x += (targetX - this.camera.x) * this.camera.followSpeed;
+        this.camera.y += (targetY - this.camera.y) * this.camera.followSpeed;
+    }
+
+    // Add new method for generating mountain points
+    generateMountainPoints(peaks, height) {
+        const points = [];
+        const segments = peaks * 2;
+        
+        points.push({ x: 0, y: this.canvas.height });
+        
+        for (let i = 0; i <= segments; i++) {
+            const x = (i / segments) * this.levelBounds.width; // Use level width instead of canvas
+            let y;
+            
+            if (i % 2 === 1) {
+                y = this.canvas.height - (Math.random() * this.canvas.height * height);
+            } else {
+                y = this.canvas.height - (Math.random() * this.canvas.height * height * 0.5);
+            }
+            
+            points.push({ x, y });
+        }
+        
+        points.push({ x: this.levelBounds.width, y: this.canvas.height });
+        
+        return points;
+    }
+
+    // Add new method for bounce effect
+    createStarBounceEffect(x, y) {
+        const bounceParticles = [];
+        for (let i = 0; i < 5; i++) {
+            const angle = (Math.random() * Math.PI * 2);
+            bounceParticles.push({
+                x: x,
+                y: y,
+                velocityX: Math.cos(angle) * (1 + Math.random() * 2),
+                velocityY: Math.sin(angle) * (1 + Math.random() * 2),
+                color: `hsl(${Math.random() * 360}, 100%, 70%)`,
+                size: 2 + Math.random() * 2,
+                life: 15 + Math.random() * 10
+            });
+        }
+        if (!this.starEffects) this.starEffects = [];
+        this.starEffects.push(...bounceParticles);
     }
 }
 
