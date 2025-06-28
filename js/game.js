@@ -1837,113 +1837,117 @@ class Game {
     
     // Draw star direction indicator when star is off-screen
     drawStarIndicator() {
-        if (this.star.collected) return;
-        
-        // Calculate star position relative to camera
-        const starScreenX = this.star.x - this.camera.x;
-        const starScreenY = this.star.y - this.camera.y;
-        
-        // Check if star is off-screen
-        const margin = 50; // Distance from edge to show indicator
-        const isOffScreen = starScreenX < -margin || starScreenX > this.canvas.width + margin ||
-                           starScreenY < -margin || starScreenY > this.canvas.height + margin;
-        
-        if (isOffScreen) {
-            // Calculate direction from center of screen to star
-            const centerX = this.canvas.width / 2;
-            const centerY = this.canvas.height / 2;
-            const dx = starScreenX - centerX;
-            const dy = starScreenY - centerY;
-            const angle = Math.atan2(dy, dx);
+        try {
+            if (this.star.collected) return;
             
-            // Calculate position at edge of screen
-            const indicatorDistance = 40; // Distance from screen edge
-            let indicatorX, indicatorY;
+            // Calculate star position relative to camera/screen
+            const starScreenX = this.star.x - this.camera.x;
+            const starScreenY = this.star.y - this.camera.y;
             
-            // Determine which edge the indicator should be on
-            const cos = Math.cos(angle);
-            const sin = Math.sin(angle);
+            // More generous margins for better user experience
+            const margin = 60;
+            const isOffScreen = starScreenX < -margin || starScreenX > this.canvas.width + margin ||
+                               starScreenY < -margin || starScreenY > this.canvas.height + margin;
             
-            // Check intersection with screen boundaries
-            const rightEdge = this.canvas.width - indicatorDistance;
-            const leftEdge = indicatorDistance;
-            const bottomEdge = this.canvas.height - indicatorDistance;
-            const topEdge = indicatorDistance;
-            
-            if (Math.abs(cos) > Math.abs(sin)) {
-                // Horizontal edge (left or right)
-                if (cos > 0) {
-                    indicatorX = rightEdge;
-                    indicatorY = centerY + (rightEdge - centerX) * Math.tan(angle);
-                } else {
-                    indicatorX = leftEdge;
-                    indicatorY = centerY + (leftEdge - centerX) * Math.tan(angle);
-                }
-            } else {
-                // Vertical edge (top or bottom)
-                if (sin > 0) {
-                    indicatorY = bottomEdge;
-                    indicatorX = centerX + (bottomEdge - centerY) / Math.tan(angle);
-                } else {
-                    indicatorY = topEdge;
-                    indicatorX = centerX + (topEdge - centerY) / Math.tan(angle);
+            if (isOffScreen) {
+                // Calculate direction from screen center to star
+                const centerX = this.canvas.width / 2;
+                const centerY = this.canvas.height / 2;
+                const dx = starScreenX - centerX;
+                const dy = starScreenY - centerY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance > 0) { // Avoid division by zero
+                    const angle = Math.atan2(dy, dx);
+                    
+                    // Find intersection point with screen edge
+                    const edgeDistance = 50;
+                    let indicatorX, indicatorY;
+                    
+                    // Simple edge calculation
+                    const cos = Math.cos(angle);
+                    const sin = Math.sin(angle);
+                    
+                    if (Math.abs(cos) > Math.abs(sin)) {
+                        // Hit left or right edge
+                        if (cos > 0) {
+                            indicatorX = this.canvas.width - edgeDistance;
+                        } else {
+                            indicatorX = edgeDistance;
+                        }
+                        const tanAngle = Math.tan(angle);
+                        if (isFinite(tanAngle)) {
+                            indicatorY = centerY + (indicatorX - centerX) * tanAngle;
+                        } else {
+                            indicatorY = centerY;
+                        }
+                        indicatorY = Math.max(edgeDistance, Math.min(this.canvas.height - edgeDistance, indicatorY));
+                    } else {
+                        // Hit top or bottom edge
+                        if (sin > 0) {
+                            indicatorY = this.canvas.height - edgeDistance;
+                        } else {
+                            indicatorY = edgeDistance;
+                        }
+                        const tanAngle = Math.tan(angle);
+                        if (isFinite(tanAngle) && tanAngle !== 0) {
+                            indicatorX = centerX + (indicatorY - centerY) / tanAngle;
+                        } else {
+                            indicatorX = centerX;
+                        }
+                        indicatorX = Math.max(edgeDistance, Math.min(this.canvas.width - edgeDistance, indicatorX));
+                    }
+                    
+                    // Draw the indicator
+                    this.ctx.save();
+                    this.ctx.translate(indicatorX, indicatorY);
+                    this.ctx.rotate(angle);
+                    
+                    // Pulsing effect
+                    const pulse = 0.9 + 0.1 * Math.sin(Date.now() / 200);
+                    this.ctx.scale(pulse, pulse);
+                    
+                    // Draw arrow with shadow
+                    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(12, 2);
+                    this.ctx.lineTo(-8, -6);
+                    this.ctx.lineTo(-4, 2);
+                    this.ctx.lineTo(-8, 8);
+                    this.ctx.closePath();
+                    this.ctx.fill();
+                    
+                    // Draw main arrow
+                    this.ctx.fillStyle = '#FFD700';
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(12, 0);
+                    this.ctx.lineTo(-8, -6);
+                    this.ctx.lineTo(-4, 0);
+                    this.ctx.lineTo(-8, 6);
+                    this.ctx.closePath();
+                    this.ctx.fill();
+                    
+                    // Arrow outline
+                    this.ctx.strokeStyle = '#B8860B';
+                    this.ctx.lineWidth = 1.5;
+                    this.ctx.stroke();
+                    
+                    this.ctx.restore();
+                    
+                    // Draw star symbol
+                    this.ctx.save();
+                    this.ctx.fillStyle = '#FFD700';
+                    this.ctx.font = 'bold 14px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.strokeStyle = '#000';
+                    this.ctx.lineWidth = 2;
+                    this.ctx.strokeText('★', indicatorX, indicatorY - 18);
+                    this.ctx.fillText('★', indicatorX, indicatorY - 18);
+                    this.ctx.restore();
                 }
             }
-            
-            // Clamp to screen bounds
-            indicatorX = Math.max(indicatorDistance, Math.min(this.canvas.width - indicatorDistance, indicatorX));
-            indicatorY = Math.max(indicatorDistance, Math.min(this.canvas.height - indicatorDistance, indicatorY));
-            
-            // Draw arrow indicator
-            this.ctx.save();
-            this.ctx.translate(indicatorX, indicatorY);
-            this.ctx.rotate(angle);
-            
-            // Draw pulsing arrow
-            const pulse = 0.8 + 0.2 * Math.sin(Date.now() / 200); // Pulsing effect
-            this.ctx.scale(pulse, pulse);
-            
-            // Arrow shadow
-            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-            this.ctx.beginPath();
-            this.ctx.moveTo(15 + 2, 0 + 2);
-            this.ctx.lineTo(-10 + 2, -8 + 2);
-            this.ctx.lineTo(-5 + 2, 0 + 2);
-            this.ctx.lineTo(-10 + 2, 8 + 2);
-            this.ctx.closePath();
-            this.ctx.fill();
-            
-            // Arrow body (golden color to match star)
-            const gradient = this.ctx.createLinearGradient(-10, -8, 15, 8);
-            gradient.addColorStop(0, '#FFD700');  // Gold
-            gradient.addColorStop(0.5, '#FFA500'); // Orange
-            gradient.addColorStop(1, '#FF8C00');   // Dark orange
-            
-            this.ctx.fillStyle = gradient;
-            this.ctx.beginPath();
-            this.ctx.moveTo(15, 0);
-            this.ctx.lineTo(-10, -8);
-            this.ctx.lineTo(-5, 0);
-            this.ctx.lineTo(-10, 8);
-            this.ctx.closePath();
-            this.ctx.fill();
-            
-            // Arrow outline
-            this.ctx.strokeStyle = '#B8860B'; // Dark golden rod
-            this.ctx.lineWidth = 1;
-            this.ctx.stroke();
-            
-            // Distance text (optional)
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            const distanceInPixels = Math.round(distance / 50); // Rough distance estimation
-            
-            this.ctx.rotate(-angle); // Reset rotation for text
-            this.ctx.fillStyle = 'white';
-            this.ctx.font = '12px Arial';
-            this.ctx.textAlign = 'center';
-            this.ctx.fillText(`★`, 0, -25); // Star symbol above arrow
-            
-            this.ctx.restore();
+        } catch (error) {
+            console.error('Star indicator error:', error);
         }
     }
     
