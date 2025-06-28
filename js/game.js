@@ -937,7 +937,7 @@ class Game {
         this.updateCamera();
         
         // Update miners
-        this.updateMiners();
+        this.updateMiners(deltaMultiplier);
         
         // Procedural generation based on player position
         this.updateProceduralGeneration();
@@ -1972,7 +1972,7 @@ class Game {
     }
     
     // Add miner update method
-    updateMiners() {
+    updateMiners(deltaMultiplier = 1.0) {
         this.miners.forEach(miner => {
             if (miner.health <= 0) return; // Skip dead miners
             
