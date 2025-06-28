@@ -2,6 +2,8 @@
 
 A relaxing browser-based game where you control a rock doing rock things - like rolling down hills and generally being a rock. A peaceful parody of Super Meat Boy.
 
+🎮 **[Play Super Rock Boy Now!](https://nathannorman.github.io/super-rock-boy)** 🎮
+
 ## Changelog
 
 ### [0.0.1] - 2024-11-23 10:00 EST

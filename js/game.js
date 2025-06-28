@@ -290,8 +290,99 @@ class Game {
         window.addEventListener('keydown', (e) => this.handleKeyDown(e));
         window.addEventListener('keyup', (e) => this.handleKeyUp(e));
         
+        // Add mobile touch controls
+        this.initMobileControls();
+        
         console.log('Super Rock Boy initialized!');
         this.gameLoop();
+    }
+
+    initMobileControls() {
+        const leftBtn = document.getElementById('left-btn');
+        const rightBtn = document.getElementById('right-btn');
+        const jumpBtn = document.getElementById('jump-btn');
+
+        if (leftBtn && rightBtn && jumpBtn) {
+            // Left button events
+            leftBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                this.keys.left = true;
+            });
+            leftBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                this.keys.left = false;
+            });
+            leftBtn.addEventListener('touchcancel', (e) => {
+                e.preventDefault();
+                this.keys.left = false;
+            });
+
+            // Right button events  
+            rightBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                this.keys.right = true;
+            });
+            rightBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                this.keys.right = false;
+            });
+            rightBtn.addEventListener('touchcancel', (e) => {
+                e.preventDefault();
+                this.keys.right = false;
+            });
+
+            // Jump button events
+            jumpBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (!this.keys.jumpPressed && this.rock.canJump) {
+                    this.rock.velocityY = this.physics.jumpForce;
+                    this.rock.canJump = false;
+                    this.playSound('jump');
+                    this.keys.jumpPressed = true;
+                }
+            });
+            jumpBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                this.keys.jumpPressed = false;
+            });
+            jumpBtn.addEventListener('touchcancel', (e) => {
+                e.preventDefault();
+                this.keys.jumpPressed = false;
+            });
+
+            // Also add mouse events for desktop testing
+            leftBtn.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                this.keys.left = true;
+            });
+            leftBtn.addEventListener('mouseup', (e) => {
+                e.preventDefault();
+                this.keys.left = false;
+            });
+
+            rightBtn.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                this.keys.right = true;
+            });
+            rightBtn.addEventListener('mouseup', (e) => {
+                e.preventDefault();
+                this.keys.right = false;
+            });
+
+            jumpBtn.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                if (!this.keys.jumpPressed && this.rock.canJump) {
+                    this.rock.velocityY = this.physics.jumpForce;
+                    this.rock.canJump = false;
+                    this.playSound('jump');
+                    this.keys.jumpPressed = true;
+                }
+            });
+            jumpBtn.addEventListener('mouseup', (e) => {
+                e.preventDefault();
+                this.keys.jumpPressed = false;
+            });
+        }
     }
 
     handleKeyDown(e) {
