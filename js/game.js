@@ -169,6 +169,7 @@ class Game {
             xp: 0,
             xpToNext: 100,  // Base XP needed
             evolution: 'pebble', // Current form
+            worldLevel: 1, // New world level system
             // Evolution stages and their levels
             stages: {
                 'pebble': { minLevel: 1, color: '#808080', strength: 1 },
@@ -227,9 +228,32 @@ class Game {
         this.starRespawnTimer = 0;
         this.starRespawnDelay = 180; // 3 seconds at 60fps
         
+        // Add miners array
+        this.miners = [
+            this.createMiner(600, this.physics.groundY),
+            this.createMiner(1000, this.physics.groundY),
+            this.createMiner(1500, this.physics.groundY),
+            this.createMiner(2100, this.physics.groundY)
+        ];
+        
+        // Add procedural generation tracking
+        this.proceduralGeneration = {
+            rightmostGenerated: this.levelBounds.width, // Track rightmost generated content
+            leftmostGenerated: 0, // Track leftmost generated content
+            generationDistance: 800, // Generate new content every 800 pixels
+            lookAheadDistance: 1600 // Generate content this far ahead/behind player
+        };
+        
         // Initialize game music
         this.music = new Audio('assets/audio/supa_rock_boy_game_music.mp3');
         this.music.loop = true;
+        
+        // Initialize sound effects
+        this.sounds = {
+            jump: new Audio('assets/audio/jump_sound_effect.mp3'),
+            damage: new Audio('assets/audio/damage_sound_effect.mp3'),
+            starCollect: new Audio('assets/audio/star_collection.mp3')
+        };
         
         // Setup music button
         this.setupMusicButton();
@@ -249,6 +273,15 @@ class Game {
                     })
                     .catch(e => console.warn('Audio play failed:', e));
             });
+        }
+    }
+    
+    playSound(soundName) {
+        if (this.sounds[soundName]) {
+            // Stop any currently playing instance and reset
+            this.sounds[soundName].pause();
+            this.sounds[soundName].currentTime = 0;
+            this.sounds[soundName].play().catch(e => console.warn(`Sound ${soundName} play failed:`, e));
         }
     }
 
@@ -289,6 +322,7 @@ class Game {
                 if (!this.keys.jumpPressed && this.rock.canJump) {
                     this.rock.velocityY = this.physics.jumpForce;
                     this.rock.canJump = false;
+                    this.playSound('jump');
                 }
                 this.keys.jumpPressed = true;
                 this.keys.up = true;
@@ -445,19 +479,7 @@ class Game {
             this.rock.isGrounded = false;
         }
 
-        // Horizontal boundaries with bounce
-        if (this.rock.x - this.baseRadius < 0) {
-            this.rock.x = this.baseRadius;
-            this.rock.velocityX = Math.abs(this.rock.velocityX) * 0.5;
-        } else if (this.rock.x + this.baseRadius > this.levelBounds.width) {
-            this.rock.x = this.levelBounds.width - this.baseRadius;
-            this.rock.velocityX = -Math.abs(this.rock.velocityX) * 0.5;
-        }
-
-        // Add rotation on wall bounces
-        if (this.rock.x - this.baseRadius < 0 || this.rock.x + this.baseRadius > this.levelBounds.width) {
-            this.rock.rotationVelocity *= -0.8; // Reverse some of the rotation on wall hits
-        }
+        // No horizontal boundaries - infinite scrolling in both directions
 
         // Update rotation position
         this.rock.rotation += this.rock.rotationVelocity;
@@ -485,7 +507,8 @@ class Game {
                 this.rock.y + this.rock.baseRadius > spike.y &&
                 this.rock.y - this.rock.baseRadius < spike.y + spike.height) {
                 
-                this.health.takeDamage(20); // Damage amount
+                this.health.takeDamage(10); // Reduced damage amount
+                this.playSound('damage');
                 
                 // Bounce away from spike
                 this.rock.velocityY = this.physics.jumpForce * 0.7;
@@ -567,9 +590,10 @@ class Game {
             const dy = this.rock.y - this.star.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
             
-            if (distance < this.rock.baseRadius + this.star.size) {
+            if (distance < this.rock.baseRadius + this.star.size && !this.star.collected) {
                 this.star.collected = true;
                 this.level.xp += 50; // Give XP for collecting star
+                this.playSound('starCollect');
                 this.startStarCollectEffect();
                 this.starRespawnTimer = this.starRespawnDelay;
                 
@@ -623,6 +647,12 @@ class Game {
 
         // Add to update method before other updates
         this.updateCamera();
+        
+        // Update miners
+        this.updateMiners();
+        
+        // Procedural generation based on player position
+        this.updateProceduralGeneration();
         
         // Update level change with improved control
         if (this.debug.enabled && this.debug.levelChange.active) {
@@ -697,17 +727,19 @@ class Game {
     generateRockDetails() {
         const details = [];
         const radius = this.rock ? this.rock.baseRadius : this.baseRadius;
-        const numDetails = 3 + Math.floor(Math.random() * 3);
+        const numDetails = Math.max(2, Math.min(4, Math.floor(radius / 10))); // Scale detail count with size
         
         for (let i = 0; i < numDetails; i++) {
             const startAngle = Math.random() * Math.PI * 2;
-            const length = radius * (0.3 + Math.random() * 0.4);
-            const curve = (Math.random() - 0.5) * 0.5;
+            const length = Math.min(radius * 0.4, 25); // Cap maximum length to prevent hair-like appearance
+            const curve = (Math.random() - 0.5) * 0.3; // Reduce curve intensity
+            const thickness = Math.max(1, radius / 15); // Scale thickness with size
             
             details.push({
                 startAngle,
                 length,
-                curve
+                curve,
+                thickness
             });
         }
         return details;
@@ -733,27 +765,36 @@ class Game {
         this.ctx.fillStyle = skyGradient;
         this.ctx.fillRect(-this.camera.x, -this.camera.y, this.canvas.width, this.canvas.height);
         
-        // Draw each mountain layer with parallax effect
+        // Draw each mountain layer with infinite parallax effect
         this.background.layers.forEach(layer => {
-            this.ctx.beginPath();
             const parallaxOffset = this.camera.x * layer.parallaxFactor;
+            const layerWidth = this.levelBounds.width;
             
-            // Move to first point
-            this.ctx.moveTo(
-                layer.points[0].x - parallaxOffset,
-                layer.points[0].y
-            );
+            // Calculate how many times we need to repeat the mountains
+            const startRepeat = Math.floor(parallaxOffset / layerWidth) - 1;
+            const endRepeat = Math.ceil((parallaxOffset + this.canvas.width) / layerWidth) + 1;
             
-            // Draw through all points
-            layer.points.forEach(point => {
-                this.ctx.lineTo(
-                    point.x - parallaxOffset,
-                    point.y
+            for (let repeat = startRepeat; repeat <= endRepeat; repeat++) {
+                this.ctx.beginPath();
+                const offsetX = repeat * layerWidth - parallaxOffset;
+                
+                // Move to first point
+                this.ctx.moveTo(
+                    layer.points[0].x + offsetX,
+                    layer.points[0].y
                 );
-            });
-            
-            this.ctx.fillStyle = layer.color;
-            this.ctx.fill();
+                
+                // Draw through all points
+                layer.points.forEach(point => {
+                    this.ctx.lineTo(
+                        point.x + offsetX,
+                        point.y
+                    );
+                });
+                
+                this.ctx.fillStyle = layer.color;
+                this.ctx.fill();
+            }
         });
         
         this.ctx.restore();
@@ -800,11 +841,28 @@ class Game {
         this.spikes.forEach(spike => {
             this.ctx.fillStyle = spike.color;
             this.ctx.beginPath();
-            this.ctx.moveTo(spike.x, spike.y + spike.height);
-            this.ctx.lineTo(spike.x + spike.width/2, spike.y);
-            this.ctx.lineTo(spike.x + spike.width, spike.y + spike.height);
+            
+            if (spike.upsideDown) {
+                // Upside-down spike (on platforms) - point faces down
+                this.ctx.moveTo(spike.x, spike.y);
+                this.ctx.lineTo(spike.x + spike.width/2, spike.y + spike.height);
+                this.ctx.lineTo(spike.x + spike.width, spike.y);
+            } else {
+                // Normal spike (on ground) - point faces up
+                this.ctx.moveTo(spike.x, spike.y + spike.height);
+                this.ctx.lineTo(spike.x + spike.width/2, spike.y);
+                this.ctx.lineTo(spike.x + spike.width, spike.y + spike.height);
+            }
+            
             this.ctx.closePath();
             this.ctx.fill();
+        });
+        
+        // Draw miners
+        this.miners.forEach(miner => {
+            if (miner.health <= 0) return; // Skip dead miners
+            
+            this.drawMiner(miner);
         });
         
         // Draw star and its trail
@@ -902,21 +960,31 @@ class Game {
             this.ctx.fillStyle = gradient;
             this.ctx.fill();
             
-            // Draw rock details
-            this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
-            this.ctx.lineWidth = 1;
+            // Draw rock details as more natural-looking facets
             this.rock.details.forEach(detail => {
+                this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+                this.ctx.lineWidth = detail.thickness;
+                this.ctx.lineCap = 'round';
+                
                 this.ctx.beginPath();
-                const startX = Math.cos(detail.startAngle) * this.rock.baseRadius * 0.5;
-                const startY = Math.sin(detail.startAngle) * this.rock.baseRadius * 0.5;
+                const startX = Math.cos(detail.startAngle) * this.rock.baseRadius * 0.4;
+                const startY = Math.sin(detail.startAngle) * this.rock.baseRadius * 0.4;
                 this.ctx.moveTo(startX, startY);
                 
                 const endX = startX + Math.cos(detail.startAngle) * detail.length;
                 const endY = startY + Math.sin(detail.startAngle) * detail.length;
-                const controlX = (startX + endX) / 2 + detail.curve * this.rock.baseRadius;
-                const controlY = (startY + endY) / 2 + detail.curve * this.rock.baseRadius;
+                const controlX = (startX + endX) / 2 + detail.curve * this.rock.baseRadius * 0.3;
+                const controlY = (startY + endY) / 2 + detail.curve * this.rock.baseRadius * 0.3;
                 
                 this.ctx.quadraticCurveTo(controlX, controlY, endX, endY);
+                this.ctx.stroke();
+                
+                // Add a lighter highlight line for depth
+                this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+                this.ctx.lineWidth = detail.thickness * 0.5;
+                this.ctx.beginPath();
+                this.ctx.moveTo(startX - 1, startY - 1);
+                this.ctx.quadraticCurveTo(controlX - 1, controlY - 1, endX - 1, endY - 1);
                 this.ctx.stroke();
             });
             
@@ -955,7 +1023,7 @@ class Game {
             `Evolution: ${this.level.evolution.charAt(0).toUpperCase() + this.level.evolution.slice(1)}`,
             xpX, xpY + 30
         );
-        this.ctx.fillText(`Level: ${this.level.current}`, xpX + 150, xpY + 30);
+        this.ctx.fillText(`Level: ${this.level.current} | World: ${this.level.worldLevel}`, xpX + 150, xpY + 30);
         
         // Debug Panel
         if (this.debug.enabled) {
@@ -1107,19 +1175,18 @@ class Game {
             xp: 0,
             xpToNext: 100,
             evolution: 'pebble',
+            worldLevel: 1, // Reset world level on game over
             stages: this.level.stages  // Keep the stage definitions
         };
 
         // Reset health - create new Health instance instead of plain object
         this.health = new Health(this);
 
-        // Reset rock
+        // Reset rock - ensure proper order of operations
         this.rock = {
             x: this.canvas.width / 2,
             y: this.canvas.height / 2,
-            baseRadius: this.baseRadius,
-            points: this.generateRockPoints(),
-            details: this.generateRockDetails(),
+            baseRadius: this.baseRadius, // Reset to original base size
             velocityX: 0,
             velocityY: 0,
             acceleration: this.physics.moveSpeed,
@@ -1130,6 +1197,10 @@ class Game {
             isGrounded: false,
             canJump: false
         };
+        
+        // Generate visual properties after rock object is fully reset
+        this.rock.points = this.generateRockPoints();
+        this.rock.details = this.generateRockDetails();
 
         // Clear all special effects
         this.rockPieces = null;
@@ -1142,6 +1213,13 @@ class Game {
         this.star.y = this.canvas.height / 2;
         this.star.trail = [];
         this.starCollectParticles = null;
+        
+        // Reset miners
+        this.generateMinersForLevel();
+        
+        // Reset procedural generation
+        this.proceduralGeneration.rightmostGenerated = this.levelBounds.width;
+        this.proceduralGeneration.leftmostGenerated = 0;
     }
 
     // Modify the levelUp method
@@ -1162,9 +1240,9 @@ class Game {
                     evolved = true;
                     this.startEvolutionAnimation();
                     
-                    // Check for diamond evolution (win condition)
+                    // Check for diamond evolution (level progression)
                     if (stage === 'diamond') {
-                        this.startWinSequence();
+                        this.startNextWorldLevel();
                     }
                 }
             }
@@ -1186,14 +1264,14 @@ class Game {
         this.health.current = this.health.max;
     }
 
-    // Add new win sequence method
-    startWinSequence() {
+    // Add new world level progression method
+    startNextWorldLevel() {
         this.winScreen = {
             active: true,
             timer: 180, // 3 seconds at 60fps
             particles: [],
-            message: "You've become a diamond!",
-            gameComplete: true  // Add this flag
+            message: `Level ${this.level.worldLevel} Complete!`,
+            gameComplete: false  // Continue to next level
         };
         
         // Create celebration particles
@@ -1214,17 +1292,38 @@ class Game {
 
     // Add new method for level transition
     startNextLevel() {
-        // Reset position but keep evolution status
+        // Advance world level
+        this.level.worldLevel++;
+        
+        // Reset evolution progress but keep some XP
+        this.level.current = 1;
+        this.level.xp = 0; 
+        this.level.xpToNext = 100;
+        this.level.evolution = 'pebble';
+        
+        // Reset rock to starting size and position
         this.rock.x = this.canvas.width / 2;
         this.rock.y = this.canvas.height / 2;
         this.rock.velocityX = 0;
         this.rock.velocityY = 0;
+        this.rock.baseRadius = this.baseRadius;
+        this.rock.points = this.generateRockPoints();
+        this.rock.details = this.generateRockDetails();
         
-        // Could add more advanced level progression here
+        // Reset health
+        this.health = new Health(this);
+        
+        // Generate new miners for this level (more miners on higher levels)
+        this.generateMinersForLevel();
+        
+        // Reset procedural generation for new level
+        this.proceduralGeneration.rightmostGenerated = this.levelBounds.width;
+        this.proceduralGeneration.leftmostGenerated = 0;
+        
+        // Clear win screen
         this.winScreen = null;
         
-        // For now, just add a congratulatory message
-        console.log("Next level coming soon!");
+        console.log(`Starting Level ${this.level.worldLevel}!`);
     }
 
     // Add color utility methods
@@ -1363,12 +1462,14 @@ class Game {
 
     // Add helper method for spike placement
     placeSpike(x, platformY = null) {
+        const isOnPlatform = platformY !== null;
         return {
             x: x,
-            y: platformY ? platformY + 20 : this.canvas.height - 70, // If no platform, place on ground
+            y: platformY ? platformY + 20 : this.canvas.height - 70, // Platform spikes hang below platform, ground spikes on ground
             width: 30,
             height: 20,
-            color: '#FF0000'
+            color: '#FF0000',
+            upsideDown: isOnPlatform // Platform spikes point downward
         };
     }
 
@@ -1444,6 +1545,395 @@ class Game {
         }
         if (!this.starEffects) this.starEffects = [];
         this.starEffects.push(...bounceParticles);
+    }
+    
+    // Add miner creation method
+    createMiner(x, groundY) {
+        return {
+            x: x,
+            y: groundY, // Position miner on ground level
+            width: 20,
+            height: 30,
+            velocityX: 1 + Math.random() * 2, // Random walking speed
+            direction: Math.random() > 0.5 ? 1 : -1, // Random initial direction
+            health: 100,
+            maxHealth: 100,
+            
+            // Attack properties
+            attackRange: 40,
+            attackDamage: 15,
+            attackCooldown: 0,
+            attackDelay: 180, // 3 seconds between attacks
+            isAttacking: false,
+            attackAnimation: 0,
+            attackDuration: 60, // 1 second attack animation
+            
+            // Visual properties
+            color: '#8B4513',
+            pickaxeColor: '#654321',
+            helmetColor: '#FFD700',
+            
+            // Animation properties
+            walkAnimation: 0, // Animation timer for leg movement
+            walkSpeed: 0.15 // Speed of walk animation
+        };
+    }
+    
+    // Add miner update method
+    updateMiners() {
+        this.miners.forEach(miner => {
+            if (miner.health <= 0) return; // Skip dead miners
+            
+            // Calculate distance to rock
+            const dx = this.rock.x - miner.x;
+            const dy = this.rock.y - miner.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Update attack cooldown
+            if (miner.attackCooldown > 0) {
+                miner.attackCooldown--;
+            }
+            
+            // Check if rock is in attack range
+            if (distance <= miner.attackRange && !miner.isAttacking && miner.attackCooldown <= 0) {
+                // Start attack
+                miner.isAttacking = true;
+                miner.attackAnimation = miner.attackDuration;
+                miner.attackCooldown = miner.attackDelay;
+            }
+            
+            // Handle attack animation
+            if (miner.isAttacking) {
+                miner.attackAnimation--;
+                
+                // Deal damage at peak of swing (halfway through animation)
+                if (miner.attackAnimation === Math.floor(miner.attackDuration / 2)) {
+                    if (distance <= miner.attackRange && !this.health.damageFlashTime) {
+                        this.health.takeDamage(miner.attackDamage);
+                        this.playSound('damage');
+                        
+                        // Knockback effect
+                        const knockbackForce = 5;
+                        this.rock.velocityX += (dx / distance) * knockbackForce;
+                        this.rock.velocityY = -3; // Small upward bounce
+                    }
+                }
+                
+                // End attack
+                if (miner.attackAnimation <= 0) {
+                    miner.isAttacking = false;
+                }
+            } else {
+                // Normal movement when not attacking
+                miner.x += miner.velocityX * miner.direction;
+                
+                // Update walk animation
+                miner.walkAnimation += miner.walkSpeed;
+                
+                // Reverse direction randomly (no boundaries for infinite scrolling)
+                if (Math.random() < 0.01) {
+                    miner.direction *= -1;
+                }
+            }
+        });
+    }
+    
+    // Add miner drawing method with legs and funny face
+    drawMiner(miner) {
+        this.ctx.save();
+        this.ctx.translate(miner.x, miner.y);
+        
+        // Flip sprite based on direction
+        if (miner.direction < 0) {
+            this.ctx.scale(-1, 1);
+        }
+        
+        // Calculate leg positions for walking animation
+        const legSwing = Math.sin(miner.walkAnimation) * 0.3; // Swing amount
+        const leftLegAngle = miner.isAttacking ? 0 : legSwing;
+        const rightLegAngle = miner.isAttacking ? 0 : -legSwing;
+        
+        // Draw legs
+        this.ctx.strokeStyle = miner.color;
+        this.ctx.lineWidth = 3;
+        this.ctx.lineCap = 'round';
+        
+        // Left leg
+        const leftLegX = -3;
+        const leftLegStartY = -5;
+        const leftLegEndX = leftLegX + Math.sin(leftLegAngle) * 8;
+        const leftLegEndY = leftLegStartY + Math.cos(leftLegAngle) * 12;
+        this.ctx.beginPath();
+        this.ctx.moveTo(leftLegX, leftLegStartY);
+        this.ctx.lineTo(leftLegEndX, leftLegEndY);
+        this.ctx.stroke();
+        
+        // Right leg
+        const rightLegX = 3;
+        const rightLegStartY = -5;
+        const rightLegEndX = rightLegX + Math.sin(rightLegAngle) * 8;
+        const rightLegEndY = rightLegStartY + Math.cos(rightLegAngle) * 12;
+        this.ctx.beginPath();
+        this.ctx.moveTo(rightLegX, rightLegStartY);
+        this.ctx.lineTo(rightLegEndX, rightLegEndY);
+        this.ctx.stroke();
+        
+        // Draw feet
+        this.ctx.fillStyle = '#654321';
+        this.ctx.beginPath();
+        this.ctx.arc(leftLegEndX, leftLegEndY, 2, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.beginPath();
+        this.ctx.arc(rightLegEndX, rightLegEndY, 2, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Draw miner body
+        this.ctx.fillStyle = miner.color;
+        this.ctx.fillRect(-miner.width/2, -miner.height, miner.width, miner.height);
+        
+        // Draw arms
+        this.ctx.strokeStyle = miner.color;
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.moveTo(-8, -miner.height/2);
+        this.ctx.lineTo(-12, -miner.height/2 + 8);
+        this.ctx.stroke();
+        
+        // Draw helmet
+        this.ctx.fillStyle = miner.helmetColor;
+        this.ctx.beginPath();
+        this.ctx.arc(0, -miner.height + 5, 8, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Draw helmet light
+        this.ctx.fillStyle = '#FFF';
+        this.ctx.beginPath();
+        this.ctx.arc(0, -miner.height + 5, 3, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Draw funny face
+        const faceY = -miner.height + 12;
+        
+        // Eyes
+        this.ctx.fillStyle = '#000';
+        this.ctx.beginPath();
+        this.ctx.arc(-3, faceY, 1.5, 0, Math.PI * 2); // Left eye
+        this.ctx.fill();
+        this.ctx.beginPath();
+        this.ctx.arc(3, faceY, 1.5, 0, Math.PI * 2); // Right eye
+        this.ctx.fill();
+        
+        // Nose
+        this.ctx.fillStyle = '#FF6B6B';
+        this.ctx.beginPath();
+        this.ctx.arc(0, faceY + 2, 1, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Mouth - changes based on if attacking
+        this.ctx.strokeStyle = '#000';
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        if (miner.isAttacking) {
+            // Angry mouth when attacking
+            this.ctx.arc(0, faceY + 4, 3, 0.2 * Math.PI, 0.8 * Math.PI);
+        } else {
+            // Happy mouth when walking
+            this.ctx.arc(0, faceY + 3, 3, 0.2 * Math.PI, 0.8 * Math.PI, true);
+        }
+        this.ctx.stroke();
+        
+        // Mustache
+        this.ctx.strokeStyle = '#8B4513';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.moveTo(-4, faceY + 3);
+        this.ctx.lineTo(-1, faceY + 2.5);
+        this.ctx.moveTo(1, faceY + 2.5);
+        this.ctx.lineTo(4, faceY + 3);
+        this.ctx.stroke();
+        
+        // Draw pickaxe
+        const attackProgress = miner.isAttacking ? 
+            (miner.attackDuration - miner.attackAnimation) / miner.attackDuration : 0;
+        const pickaxeAngle = miner.isAttacking ? 
+            -Math.PI/4 + (attackProgress * Math.PI/2) : -Math.PI/6;
+        
+        // Pickaxe handle
+        this.ctx.strokeStyle = miner.pickaxeColor;
+        this.ctx.lineWidth = 3;
+        this.ctx.lineCap = 'round';
+        this.ctx.beginPath();
+        const handleLength = 20;
+        const handleEndX = Math.cos(pickaxeAngle) * handleLength;
+        const handleEndY = Math.sin(pickaxeAngle) * handleLength;
+        this.ctx.moveTo(8, -miner.height/2);
+        this.ctx.lineTo(8 + handleEndX, -miner.height/2 + handleEndY);
+        this.ctx.stroke();
+        
+        // Pickaxe head - proper pickaxe shape (perpendicular to handle)
+        this.ctx.save();
+        this.ctx.translate(8 + handleEndX, -miner.height/2 + handleEndY);
+        this.ctx.rotate(pickaxeAngle);
+        
+        // Main pickaxe head body (perpendicular to handle)
+        this.ctx.fillStyle = '#888';
+        this.ctx.fillRect(-2, -8, 4, 16); // Vertical head connecting to handle
+        
+        // Pick side (pointed end going left)
+        this.ctx.beginPath();
+        this.ctx.moveTo(-2, -2); // Top of connection
+        this.ctx.lineTo(-10, -1); // Point tip
+        this.ctx.lineTo(-2, 2);  // Bottom of connection
+        this.ctx.closePath();
+        this.ctx.fill();
+        
+        // Adze side (flat blade going right)
+        this.ctx.beginPath();
+        this.ctx.moveTo(2, -3);  // Top of connection
+        this.ctx.lineTo(8, -2);  // Top of blade
+        this.ctx.lineTo(8, 2);   // Bottom of blade
+        this.ctx.lineTo(2, 3);   // Bottom of connection
+        this.ctx.closePath();
+        this.ctx.fill();
+        
+        // Add metal detail lines
+        this.ctx.strokeStyle = '#555';
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        // Detail on pick side
+        this.ctx.moveTo(-2, 0);
+        this.ctx.lineTo(-8, 0);
+        // Detail on adze side
+        this.ctx.moveTo(2, -1);
+        this.ctx.lineTo(7, -1);
+        this.ctx.moveTo(2, 1);
+        this.ctx.lineTo(7, 1);
+        this.ctx.stroke();
+        
+        // Add metal shine highlights
+        this.ctx.strokeStyle = '#BBB';
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        this.ctx.moveTo(-1, -1);
+        this.ctx.lineTo(-7, -0.5);
+        this.ctx.moveTo(3, -2);
+        this.ctx.lineTo(7, -1.5);
+        this.ctx.stroke();
+        
+        this.ctx.restore();
+        
+        this.ctx.restore();
+    }
+    
+    // Add method to generate miners for current level
+    generateMinersForLevel() {
+        this.miners = [];
+        const baseMiners = 4;
+        const additionalMiners = Math.floor(this.level.worldLevel / 2); // More miners every 2 levels
+        const totalMiners = Math.min(baseMiners + additionalMiners, 12); // Cap at 12 miners
+        
+        for (let i = 0; i < totalMiners; i++) {
+            // Spread miners across a wider area for each level
+            const spacing = 400 + (this.level.worldLevel * 100);
+            const x = 400 + (i * spacing) + Math.random() * 200;
+            this.miners.push(this.createMiner(x, this.physics.groundY));
+        }
+    }
+    
+    // Add procedural generation method for both directions
+    updateProceduralGeneration() {
+        const playerRightPoint = this.rock.x + this.proceduralGeneration.lookAheadDistance;
+        const playerLeftPoint = this.rock.x - this.proceduralGeneration.lookAheadDistance;
+        
+        // Generate new content to the right
+        while (this.proceduralGeneration.rightmostGenerated < playerRightPoint) {
+            const startX = this.proceduralGeneration.rightmostGenerated;
+            const endX = startX + this.proceduralGeneration.generationDistance;
+            
+            this.generateContentInRange(startX, endX);
+            this.proceduralGeneration.rightmostGenerated = endX;
+        }
+        
+        // Generate new content to the left
+        while (this.proceduralGeneration.leftmostGenerated > playerLeftPoint) {
+            const endX = this.proceduralGeneration.leftmostGenerated;
+            const startX = endX - this.proceduralGeneration.generationDistance;
+            
+            this.generateContentInRange(startX, endX);
+            this.proceduralGeneration.leftmostGenerated = startX;
+        }
+        
+        // Clean up old content that's far from the player
+        this.cleanupOldContent();
+    }
+    
+    // Generate platforms, spikes, and miners in a specific range
+    generateContentInRange(startX, endX) {
+        const rangeWidth = endX - startX;
+        
+        // Generate platforms (2-4 per range)
+        const numPlatforms = 2 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < numPlatforms; i++) {
+            const x = startX + 100 + Math.random() * (rangeWidth - 300);
+            const y = this.canvas.height - 150 - Math.random() * 200;
+            const width = 150 + Math.random() * 100;
+            
+            this.platforms.push({
+                x: x,
+                y: y,
+                width: width,
+                height: 20,
+                color: '#654321'
+            });
+            
+            // Maybe add spike to this platform (30% chance)
+            if (Math.random() < 0.3) {
+                const spikeX = x + 50 + Math.random() * (width - 100);
+                this.spikes.push(this.placeSpike(spikeX, y));
+            }
+        }
+        
+        // Generate ground spikes (1-3 per range)
+        const numGroundSpikes = 1 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < numGroundSpikes; i++) {
+            const x = startX + 200 + Math.random() * (rangeWidth - 400);
+            this.spikes.push(this.placeSpike(x));
+        }
+        
+        // Generate miners (1-2 per range, scaled by world level)
+        const baseMiners = 1 + Math.floor(Math.random() * 2);
+        const worldScaling = Math.min(2, this.level.worldLevel * 0.5);
+        const numMiners = Math.floor(baseMiners * worldScaling);
+        
+        for (let i = 0; i < numMiners; i++) {
+            const x = startX + 100 + Math.random() * (rangeWidth - 200);
+            this.miners.push(this.createMiner(x, this.physics.groundY));
+        }
+    }
+    
+    // Remove old content that's far from the player in both directions
+    cleanupOldContent() {
+        const cleanupDistance = 2000; // Remove content 2000px away from player
+        const leftCleanupThreshold = this.rock.x - cleanupDistance;
+        const rightCleanupThreshold = this.rock.x + cleanupDistance;
+        
+        // Remove old platforms
+        this.platforms = this.platforms.filter(platform => 
+            platform.x + platform.width > leftCleanupThreshold && 
+            platform.x < rightCleanupThreshold
+        );
+        
+        // Remove old spikes
+        this.spikes = this.spikes.filter(spike => 
+            spike.x + spike.width > leftCleanupThreshold && 
+            spike.x < rightCleanupThreshold
+        );
+        
+        // Remove old miners
+        this.miners = this.miners.filter(miner => 
+            miner.x > leftCleanupThreshold && 
+            miner.x < rightCleanupThreshold
+        );
     }
 }
 
