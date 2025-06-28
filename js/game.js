@@ -1037,8 +1037,8 @@ class Game {
         // Save the context state
         this.ctx.save();
         
-        // Apply camera transform
-        this.ctx.translate(this.camera.x, this.camera.y);
+        // Apply camera transform (negative to move world opposite to camera)
+        this.ctx.translate(-this.camera.x, -this.camera.y);
         
         // Draw parallax background
         this.ctx.save();
@@ -1048,7 +1048,7 @@ class Game {
         skyGradient.addColorStop(0, '#1e3c72');
         skyGradient.addColorStop(1, '#2a5298');
         this.ctx.fillStyle = skyGradient;
-        this.ctx.fillRect(-this.camera.x, -this.camera.y, this.canvas.width, this.canvas.height);
+        this.ctx.fillRect(this.camera.x, this.camera.y, this.canvas.width, this.canvas.height);
         
         // Draw each mountain layer with infinite parallax effect
         this.background.layers.forEach(layer => {
@@ -1844,110 +1844,86 @@ class Game {
             const starScreenX = this.star.x - this.camera.x;
             const starScreenY = this.star.y - this.camera.y;
             
-            // More generous margins for better user experience
-            const margin = 60;
+            // Check if star is off-screen
+            const margin = 50;
             const isOffScreen = starScreenX < -margin || starScreenX > this.canvas.width + margin ||
                                starScreenY < -margin || starScreenY > this.canvas.height + margin;
             
             if (isOffScreen) {
-                // Calculate direction from screen center to star
+                // Simple approach: place indicator at edge based on direction
                 const centerX = this.canvas.width / 2;
                 const centerY = this.canvas.height / 2;
                 const dx = starScreenX - centerX;
                 const dy = starScreenY - centerY;
-                const distance = Math.sqrt(dx * dx + dy * dy);
                 
-                if (distance > 0) { // Avoid division by zero
-                    const angle = Math.atan2(dy, dx);
-                    
-                    // Find intersection point with screen edge
-                    const edgeDistance = 50;
-                    let indicatorX, indicatorY;
-                    
-                    // Simple edge calculation
-                    const cos = Math.cos(angle);
-                    const sin = Math.sin(angle);
-                    
-                    if (Math.abs(cos) > Math.abs(sin)) {
-                        // Hit left or right edge
-                        if (cos > 0) {
-                            indicatorX = this.canvas.width - edgeDistance;
-                        } else {
-                            indicatorX = edgeDistance;
-                        }
-                        const tanAngle = Math.tan(angle);
-                        if (isFinite(tanAngle)) {
-                            indicatorY = centerY + (indicatorX - centerX) * tanAngle;
-                        } else {
-                            indicatorY = centerY;
-                        }
-                        indicatorY = Math.max(edgeDistance, Math.min(this.canvas.height - edgeDistance, indicatorY));
+                if (Math.abs(dx) === 0 && Math.abs(dy) === 0) return; // Avoid issues when star is at center
+                
+                let indicatorX, indicatorY;
+                const edgeMargin = 40;
+                
+                // Determine which edge based on larger displacement
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    // Star is more left/right than up/down
+                    if (dx > 0) {
+                        // Star is to the right - place indicator on right edge
+                        indicatorX = this.canvas.width - edgeMargin;
+                        indicatorY = centerY;
                     } else {
-                        // Hit top or bottom edge
-                        if (sin > 0) {
-                            indicatorY = this.canvas.height - edgeDistance;
-                        } else {
-                            indicatorY = edgeDistance;
-                        }
-                        const tanAngle = Math.tan(angle);
-                        if (isFinite(tanAngle) && tanAngle !== 0) {
-                            indicatorX = centerX + (indicatorY - centerY) / tanAngle;
-                        } else {
-                            indicatorX = centerX;
-                        }
-                        indicatorX = Math.max(edgeDistance, Math.min(this.canvas.width - edgeDistance, indicatorX));
+                        // Star is to the left - place indicator on left edge
+                        indicatorX = edgeMargin;
+                        indicatorY = centerY;
                     }
-                    
-                    // Draw the indicator
-                    this.ctx.save();
-                    this.ctx.translate(indicatorX, indicatorY);
-                    this.ctx.rotate(angle);
-                    
-                    // Pulsing effect
-                    const pulse = 0.9 + 0.1 * Math.sin(Date.now() / 200);
-                    this.ctx.scale(pulse, pulse);
-                    
-                    // Draw arrow with shadow
-                    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(12, 2);
-                    this.ctx.lineTo(-8, -6);
-                    this.ctx.lineTo(-4, 2);
-                    this.ctx.lineTo(-8, 8);
-                    this.ctx.closePath();
-                    this.ctx.fill();
-                    
-                    // Draw main arrow
-                    this.ctx.fillStyle = '#FFD700';
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(12, 0);
-                    this.ctx.lineTo(-8, -6);
-                    this.ctx.lineTo(-4, 0);
-                    this.ctx.lineTo(-8, 6);
-                    this.ctx.closePath();
-                    this.ctx.fill();
-                    
-                    // Arrow outline
-                    this.ctx.strokeStyle = '#B8860B';
-                    this.ctx.lineWidth = 1.5;
-                    this.ctx.stroke();
-                    
-                    this.ctx.restore();
-                    
-                    // Draw star symbol
-                    this.ctx.save();
-                    this.ctx.fillStyle = '#FFD700';
-                    this.ctx.font = 'bold 14px Arial';
-                    this.ctx.textAlign = 'center';
-                    this.ctx.strokeStyle = '#000';
-                    this.ctx.lineWidth = 2;
-                    this.ctx.strokeText('★', indicatorX, indicatorY - 18);
-                    this.ctx.fillText('★', indicatorX, indicatorY - 18);
-                    this.ctx.restore();
+                } else {
+                    // Star is more up/down than left/right
+                    if (dy > 0) {
+                        // Star is below - place indicator on bottom edge
+                        indicatorX = centerX;
+                        indicatorY = this.canvas.height - edgeMargin;
+                    } else {
+                        // Star is above - place indicator on top edge
+                        indicatorX = centerX;
+                        indicatorY = edgeMargin;
+                    }
                 }
+                
+                // Calculate angle for arrow direction
+                const angle = Math.atan2(dy, dx);
+                
+                // Draw simple indicator
+                this.ctx.save();
+                this.ctx.translate(indicatorX, indicatorY);
+                this.ctx.rotate(angle);
+                
+                // Pulsing effect
+                const pulse = 0.9 + 0.1 * Math.sin(Date.now() / 300);
+                this.ctx.scale(pulse, pulse);
+                
+                // Draw arrow
+                this.ctx.fillStyle = '#FFD700';
+                this.ctx.beginPath();
+                this.ctx.moveTo(8, 0);
+                this.ctx.lineTo(-6, -4);
+                this.ctx.lineTo(-3, 0);
+                this.ctx.lineTo(-6, 4);
+                this.ctx.closePath();
+                this.ctx.fill();
+                
+                // Arrow outline
+                this.ctx.strokeStyle = '#B8860B';
+                this.ctx.lineWidth = 1;
+                this.ctx.stroke();
+                
+                this.ctx.restore();
+                
+                // Draw star symbol nearby
+                this.ctx.fillStyle = '#FFD700';
+                this.ctx.font = '12px Arial';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText('★', indicatorX, indicatorY - 15);
             }
         } catch (error) {
             console.error('Star indicator error:', error);
+            // Don't let indicator errors break the game
         }
     }
     
