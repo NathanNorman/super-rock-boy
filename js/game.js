@@ -305,9 +305,6 @@ class Game {
         this.targetFrameTime = 1000 / this.targetFPS; // ~16.67ms for 60 FPS
         
         console.log('Super Rock Boy initialized!');
-        console.log('Rock position:', this.rock.x, this.rock.y);
-        console.log('Platforms count:', this.platforms.length);
-        console.log('Star position:', this.star.x, this.star.y);
         this.gameLoop();
     }
 
@@ -1036,11 +1033,6 @@ class Game {
     draw() {
         // Clear the canvas
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        
-        // Debug: Log that draw is being called
-        if (Math.random() < 0.01) { // Log occasionally to avoid spam
-            console.log('Draw called, rock at:', this.rock.x, this.rock.y, 'camera at:', this.camera.x, this.camera.y);
-        }
         
         // Save the context state
         this.ctx.save();
@@ -1790,17 +1782,13 @@ class Game {
 
     // Add new method for camera update
     updateCamera() {
-        // Temporarily disable camera movement for debugging
-        this.camera.x = 0;
-        this.camera.y = 0;
-        
         // Target is center of screen minus player position
-        // const targetX = this.canvas.width/2 - this.rock.x;
-        // const targetY = this.canvas.height/2 - this.rock.y;
+        const targetX = this.canvas.width/2 - this.rock.x;
+        const targetY = this.canvas.height/2 - this.rock.y;
         
         // Smooth camera movement
-        // this.camera.x += (targetX - this.camera.x) * this.camera.followSpeed;
-        // this.camera.y += (targetY - this.camera.y) * this.camera.followSpeed;
+        this.camera.x += (targetX - this.camera.x) * this.camera.followSpeed;
+        this.camera.y += (targetY - this.camera.y) * this.camera.followSpeed;
     }
 
     // Add new method for generating mountain points
@@ -2006,8 +1994,10 @@ class Game {
                         
                         // Knockback effect
                         const knockbackForce = 5;
-                        this.rock.velocityX += (dx / distance) * knockbackForce;
-                        this.rock.velocityY = -3; // Small upward bounce
+                        if (distance > 0) { // Prevent division by zero
+                            this.rock.velocityX += (dx / distance) * knockbackForce;
+                            this.rock.velocityY = -3; // Small upward bounce
+                        }
                     }
                 }
                 
@@ -2237,22 +2227,41 @@ class Game {
         const playerRightPoint = this.rock.x + this.proceduralGeneration.lookAheadDistance;
         const playerLeftPoint = this.rock.x - this.proceduralGeneration.lookAheadDistance;
         
+        // Safeguards to prevent infinite loops
+        const maxIterations = 10;
+        
         // Generate new content to the right
-        while (this.proceduralGeneration.rightmostGenerated < playerRightPoint) {
+        let rightIterations = 0;
+        while (this.proceduralGeneration.rightmostGenerated < playerRightPoint && rightIterations < maxIterations) {
             const startX = this.proceduralGeneration.rightmostGenerated;
             const endX = startX + this.proceduralGeneration.generationDistance;
             
+            // Safety check
+            if (this.proceduralGeneration.generationDistance <= 0) {
+                console.error('Invalid generation distance:', this.proceduralGeneration.generationDistance);
+                break;
+            }
+            
             this.generateContentInRange(startX, endX);
             this.proceduralGeneration.rightmostGenerated = endX;
+            rightIterations++;
         }
         
         // Generate new content to the left
-        while (this.proceduralGeneration.leftmostGenerated > playerLeftPoint) {
+        let leftIterations = 0;
+        while (this.proceduralGeneration.leftmostGenerated > playerLeftPoint && leftIterations < maxIterations) {
             const endX = this.proceduralGeneration.leftmostGenerated;
             const startX = endX - this.proceduralGeneration.generationDistance;
             
+            // Safety check
+            if (this.proceduralGeneration.generationDistance <= 0) {
+                console.error('Invalid generation distance:', this.proceduralGeneration.generationDistance);
+                break;
+            }
+            
             this.generateContentInRange(startX, endX);
             this.proceduralGeneration.leftmostGenerated = startX;
+            leftIterations++;
         }
         
         // Clean up old content that's far from the player
