@@ -1,8 +1,8 @@
 class Health {
     constructor(game) {
         this.game = game;
-        this.maxHealth = 100;
-        this.currentHealth = this.maxHealth;
+        this.max = 100;
+        this.current = this.max;
         this.damageFlashTime = 0;
         this.isGameOver = false;
         this.immunityFrames = 0;
@@ -10,11 +10,12 @@ class Health {
 
     takeDamage(amount) {
         if (this.immunityFrames <= 0) {
-            this.currentHealth -= amount;
+            this.current -= amount;
             this.damageFlashTime = 10;
             this.immunityFrames = 30; // Half second of immunity at 60 FPS
 
-            if (this.currentHealth <= 0) {
+            if (this.current <= 0) {
+                this.current = 0;
                 this.isGameOver = true;
             }
         }
@@ -44,7 +45,7 @@ class Health {
         ctx.fillRect(x, y, barWidth, barHeight);
 
         // Health fill
-        const healthPercent = this.currentHealth / this.maxHealth;
+        const healthPercent = this.current / this.max;
         ctx.fillStyle = this.damageFlashTime > 0 ? '#ff0000' : '#00ff00';
         ctx.fillRect(x, y, barWidth * healthPercent, barHeight);
 

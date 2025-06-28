@@ -3,13 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super Rock Boy</title>
+    <title>Super Rock Boy - Evolving Rock Adventure Game</title>
+    <meta name="description" content="A fun 2D platformer where you control an evolving rock, avoid miners with pickaxes, collect stars, and progress through infinite levels!">
+    <meta name="keywords" content="game, platformer, rock, evolution, browser game, HTML5, canvas">
+    <meta property="og:title" content="Super Rock Boy - Play Now!">
+    <meta property="og:description" content="Control an evolving rock in this fun platformer game! Avoid miners, collect stars, and see how far you can go!">
+    <meta property="og:type" content="website">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div id="game-container">
         <canvas id="gameCanvas"></canvas>
         <button id="playMusic" style="position: absolute; top: 10px; right: 10px;">Play Music</button>
+        <div id="instructions" style="position: absolute; bottom: 10px; left: 10px; color: white; font-family: Arial; font-size: 14px;">
+            <div>Arrow Keys: Move & Jump</div>
+            <div>Avoid miners and spikes!</div>
+            <div>Collect stars to evolve!</div>
+        </div>
     </div>
     <script type="module" src="js/game.js"></script>
 </body>
