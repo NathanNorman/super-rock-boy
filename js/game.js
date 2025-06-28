@@ -830,6 +830,34 @@ class Game {
             }
         }
 
+        // Update star effects particles if they exist  
+        if (this.starEffects) {
+            this.starEffects = this.starEffects.filter(particle => {
+                particle.x += particle.velocityX * deltaMultiplier;
+                particle.y += particle.velocityY * deltaMultiplier;
+                particle.life -= deltaMultiplier;
+                return particle.life > 0;
+            });
+            
+            if (this.starEffects.length === 0) {
+                this.starEffects = null;
+            }
+        }
+
+        // Update star collection particles if they exist
+        if (this.starCollectParticles) {
+            this.starCollectParticles = this.starCollectParticles.filter(particle => {
+                particle.x += particle.velocityX * deltaMultiplier;
+                particle.y += particle.velocityY * deltaMultiplier;
+                particle.life -= deltaMultiplier;
+                return particle.life > 0;
+            });
+            
+            if (this.starCollectParticles.length === 0) {
+                this.starCollectParticles = null;
+            }
+        }
+
         // Update star
         if (!this.star.collected) {
             // Move star (delta time compensated)
@@ -1379,26 +1407,17 @@ class Game {
         // Draw star effects (bounce particles)
         if (this.starEffects) {
             this.starEffects.forEach((particle, index) => {
-                particle.x += particle.velocityX * deltaMultiplier;
-                particle.y += particle.velocityY * deltaMultiplier;
-                particle.life -= deltaMultiplier;
-                
                 const alpha = particle.life / 15;
                 this.ctx.fillStyle = `${particle.color}${Math.floor(alpha * 255).toString(16).padStart(2, '0')}`;
                 this.ctx.beginPath();
                 this.ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
                 this.ctx.fill();
             });
-            
-            this.starEffects = this.starEffects.filter(particle => particle.life > 0);
         }
 
         // Draw star collection particles with enhanced effects
         if (this.starCollectParticles) {
             this.starCollectParticles.forEach(particle => {
-                particle.x += particle.velocityX * deltaMultiplier;
-                particle.y += particle.velocityY * deltaMultiplier;
-                particle.life -= deltaMultiplier;
                 particle.alpha = particle.life / (particle.isSparkle ? 90 : 60);
                 
                 if (particle.isSparkle) {
@@ -1427,10 +1446,6 @@ class Game {
                 }
             });
             
-            this.starCollectParticles = this.starCollectParticles.filter(particle => particle.life > 0);
-            if (this.starCollectParticles.length === 0) {
-                this.starCollectParticles = null;
-            }
         }
     }
 
