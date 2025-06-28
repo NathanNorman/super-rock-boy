@@ -1797,9 +1797,9 @@ class Game {
 
     // Add new method for camera update
     updateCamera() {
-        // Target is center of screen minus player position
-        const targetX = this.canvas.width/2 - this.rock.x;
-        const targetY = this.canvas.height/2 - this.rock.y;
+        // Camera should center on the rock's position
+        const targetX = this.rock.x - this.canvas.width/2;
+        const targetY = this.rock.y - this.canvas.height/2;
         
         // Smooth camera movement
         this.camera.x += (targetX - this.camera.x) * this.camera.followSpeed;
