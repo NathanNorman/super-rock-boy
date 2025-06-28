@@ -296,6 +296,9 @@ class Game {
         // Add mobile tap-to-restart for game over screen
         this.initMobileTapRestart();
         
+        // Add mobile fullscreen functionality
+        this.initMobileFullscreen();
+        
         // Initialize timing for delta time calculations
         this.lastFrameTime = performance.now();
         this.targetFPS = 60;
@@ -419,6 +422,148 @@ class Game {
                 }, 100);
             }
         });
+    }
+
+    initMobileFullscreen() {
+        // Track orientation and fullscreen state
+        this.isLandscape = false;
+        this.isFullscreen = false;
+        
+        // Handle orientation changes
+        const handleOrientationChange = () => {
+            // Use setTimeout to ensure orientation change is complete
+            setTimeout(() => {
+                const orientation = screen.orientation || screen.mozOrientation || screen.msOrientation;
+                let isLandscape = false;
+                
+                if (orientation) {
+                    // Modern orientation API
+                    isLandscape = orientation.angle === 90 || orientation.angle === -90 || 
+                                  orientation.type.includes('landscape');
+                } else {
+                    // Fallback for older devices
+                    isLandscape = window.innerWidth > window.innerHeight;
+                }
+                
+                this.isLandscape = isLandscape;
+                
+                // Request fullscreen when rotating to landscape on mobile
+                if (isLandscape && this.isMobileDevice() && !this.isFullscreen) {
+                    this.requestFullscreen();
+                } else if (!isLandscape && this.isFullscreen) {
+                    this.exitFullscreen();
+                }
+                
+                // Resize canvas for orientation
+                this.handleCanvasResize();
+            }, 100);
+        };
+        
+        // Listen for orientation changes
+        if (screen.orientation) {
+            screen.orientation.addEventListener('change', handleOrientationChange);
+        } else {
+            // Fallback for older browsers
+            window.addEventListener('orientationchange', handleOrientationChange);
+            window.addEventListener('resize', handleOrientationChange);
+        }
+        
+        // Handle fullscreen change events
+        document.addEventListener('fullscreenchange', () => {
+            this.isFullscreen = !!document.fullscreenElement;
+            this.handleCanvasResize();
+        });
+        
+        document.addEventListener('webkitfullscreenchange', () => {
+            this.isFullscreen = !!document.webkitFullscreenElement;
+            this.handleCanvasResize();
+        });
+        
+        // Add manual fullscreen button for mobile
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        if (fullscreenBtn) {
+            fullscreenBtn.addEventListener('click', () => {
+                if (!this.isFullscreen) {
+                    this.requestFullscreen();
+                } else {
+                    this.exitFullscreen();
+                }
+            });
+        }
+    }
+    
+    isMobileDevice() {
+        return /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+               (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
+    }
+    
+    requestFullscreen() {
+        const element = document.documentElement;
+        
+        if (element.requestFullscreen) {
+            element.requestFullscreen().catch(e => console.log('Fullscreen request failed:', e));
+        } else if (element.webkitRequestFullscreen) {
+            element.webkitRequestFullscreen();
+        } else if (element.mozRequestFullScreen) {
+            element.mozRequestFullScreen();
+        } else if (element.msRequestFullscreen) {
+            element.msRequestFullscreen();
+        }
+    }
+    
+    exitFullscreen() {
+        if (document.exitFullscreen) {
+            document.exitFullscreen().catch(e => console.log('Exit fullscreen failed:', e));
+        } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+        } else if (document.mozCancelFullScreen) {
+            document.mozCancelFullScreen();
+        } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+        }
+    }
+    
+    handleCanvasResize() {
+        if (this.isLandscape && this.isMobileDevice()) {
+            // Landscape mode - use full screen dimensions
+            const maxWidth = window.innerWidth;
+            const maxHeight = window.innerHeight;
+            
+            // Maintain aspect ratio while maximizing screen usage
+            const gameAspectRatio = 800 / 600; // Original canvas ratio
+            const screenAspectRatio = maxWidth / maxHeight;
+            
+            if (screenAspectRatio > gameAspectRatio) {
+                // Screen is wider than game ratio
+                this.canvas.style.height = `${maxHeight}px`;
+                this.canvas.style.width = `${maxHeight * gameAspectRatio}px`;
+            } else {
+                // Screen is taller than game ratio
+                this.canvas.style.width = `${maxWidth}px`;
+                this.canvas.style.height = `${maxWidth / gameAspectRatio}px`;
+            }
+            
+            // Center the canvas
+            this.canvas.style.position = 'fixed';
+            this.canvas.style.top = '50%';
+            this.canvas.style.left = '50%';
+            this.canvas.style.transform = 'translate(-50%, -50%)';
+            this.canvas.style.zIndex = '1000';
+            
+            // Hide other UI elements in landscape fullscreen
+            document.body.classList.add('landscape-fullscreen');
+        } else {
+            // Portrait mode or desktop - reset to default
+            this.canvas.style.width = '';
+            this.canvas.style.height = '';
+            this.canvas.style.position = '';
+            this.canvas.style.top = '';
+            this.canvas.style.left = '';
+            this.canvas.style.transform = '';
+            this.canvas.style.zIndex = '';
+            
+            document.body.classList.remove('landscape-fullscreen');
+        }
     }
 
     handleKeyDown(e) {
