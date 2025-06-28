@@ -305,6 +305,9 @@ class Game {
         this.targetFrameTime = 1000 / this.targetFPS; // ~16.67ms for 60 FPS
         
         console.log('Super Rock Boy initialized!');
+        console.log('Rock position:', this.rock.x, this.rock.y);
+        console.log('Platforms count:', this.platforms.length);
+        console.log('Star position:', this.star.x, this.star.y);
         this.gameLoop();
     }
 
@@ -1033,6 +1036,11 @@ class Game {
     draw() {
         // Clear the canvas
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Debug: Log that draw is being called
+        if (Math.random() < 0.01) { // Log occasionally to avoid spam
+            console.log('Draw called, rock at:', this.rock.x, this.rock.y, 'camera at:', this.camera.x, this.camera.y);
+        }
         
         // Save the context state
         this.ctx.save();
@@ -1782,13 +1790,17 @@ class Game {
 
     // Add new method for camera update
     updateCamera() {
+        // Temporarily disable camera movement for debugging
+        this.camera.x = 0;
+        this.camera.y = 0;
+        
         // Target is center of screen minus player position
-        const targetX = this.canvas.width/2 - this.rock.x;
-        const targetY = this.canvas.height/2 - this.rock.y;
+        // const targetX = this.canvas.width/2 - this.rock.x;
+        // const targetY = this.canvas.height/2 - this.rock.y;
         
         // Smooth camera movement
-        this.camera.x += (targetX - this.camera.x) * this.camera.followSpeed;
-        this.camera.y += (targetY - this.camera.y) * this.camera.followSpeed;
+        // this.camera.x += (targetX - this.camera.x) * this.camera.followSpeed;
+        // this.camera.y += (targetY - this.camera.y) * this.camera.followSpeed;
     }
 
     // Add new method for generating mountain points
