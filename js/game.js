@@ -293,6 +293,14 @@ class Game {
         // Add mobile touch controls
         this.initMobileControls();
         
+        // Add mobile tap-to-restart for game over screen
+        this.initMobileTapRestart();
+        
+        // Initialize timing for delta time calculations
+        this.lastFrameTime = performance.now();
+        this.targetFPS = 60;
+        this.targetFrameTime = 1000 / this.targetFPS; // ~16.67ms for 60 FPS
+        
         console.log('Super Rock Boy initialized!');
         this.gameLoop();
     }
@@ -385,6 +393,34 @@ class Game {
         }
     }
 
+    initMobileTapRestart() {
+        // Add tap-anywhere-to-restart for mobile when game is over
+        this.canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            
+            // Check if game is over or win screen is showing
+            if (this.health.isGameOver || (this.winScreen?.active && this.winScreen?.gameComplete)) {
+                this.keys.space = true; // Simulate space key press
+            }
+        });
+        
+        this.canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            this.keys.space = false;
+        });
+        
+        // Also add click support for desktop testing
+        this.canvas.addEventListener('click', (e) => {
+            if (this.health.isGameOver || (this.winScreen?.active && this.winScreen?.gameComplete)) {
+                this.keys.space = true;
+                // Reset after a short delay to simulate key press
+                setTimeout(() => {
+                    this.keys.space = false;
+                }, 100);
+            }
+        });
+    }
+
     handleKeyDown(e) {
         if (this.debug.enabled) {
             switch(e.key) {
@@ -452,25 +488,35 @@ class Game {
         }
     }
     
-    gameLoop() {
-        // Basic game loop
-        this.update();
+    gameLoop(currentTime = performance.now()) {
+        // Calculate delta time
+        const deltaTime = currentTime - this.lastFrameTime;
+        this.lastFrameTime = currentTime;
+        
+        // Calculate delta multiplier (1.0 = perfect 60 FPS, 0.5 = 30 FPS, 2.0 = 120 FPS)
+        const deltaMultiplier = deltaTime / this.targetFrameTime;
+        
+        // Cap extreme delta values to prevent physics breaking
+        const cappedDelta = Math.min(deltaMultiplier, 3.0);
+        
+        // Update and draw with delta time
+        this.update(cappedDelta);
         this.draw();
         
         // Request next frame
-        requestAnimationFrame(() => this.gameLoop());
+        requestAnimationFrame((time) => this.gameLoop(time));
     }
     
-    update() {
+    update(deltaMultiplier = 1.0) {
         // Check for win or game over first
         if (this.winScreen?.active || this.health.isGameOver) {
             // Only handle win screen particles and timer
             if (this.winScreen?.active) {
-                // Update win screen particles
+                // Update win screen particles (delta time compensated)
                 this.winScreen.particles.forEach(particle => {
-                    particle.x += particle.velocityX;
-                    particle.y += particle.velocityY;
-                    particle.life--;
+                    particle.x += particle.velocityX * deltaMultiplier;
+                    particle.y += particle.velocityY * deltaMultiplier;
+                    particle.life -= deltaMultiplier;
                 });
                 
                 this.winScreen.particles = this.winScreen.particles.filter(p => p.life > 0);
@@ -498,30 +544,30 @@ class Game {
             return; // Skip all other game updates
         }
 
-        // Horizontal movement with more responsive controls
+        // Horizontal movement with more responsive controls (delta time compensated)
         if (this.keys.left) {
             if (this.rock.isGrounded) {
-                this.rock.velocityX = Math.max(this.rock.velocityX - this.rock.acceleration, -this.rock.maxSpeedX);
+                this.rock.velocityX = Math.max(this.rock.velocityX - this.rock.acceleration * deltaMultiplier, -this.rock.maxSpeedX);
             } else {
                 // Slower acceleration in air
-                this.rock.velocityX = Math.max(this.rock.velocityX - this.rock.acceleration * 0.5, -this.rock.maxSpeedX);
+                this.rock.velocityX = Math.max(this.rock.velocityX - this.rock.acceleration * 0.5 * deltaMultiplier, -this.rock.maxSpeedX);
             }
         }
         if (this.keys.right) {
             if (this.rock.isGrounded) {
-                this.rock.velocityX = Math.min(this.rock.velocityX + this.rock.acceleration, this.rock.maxSpeedX);
+                this.rock.velocityX = Math.min(this.rock.velocityX + this.rock.acceleration * deltaMultiplier, this.rock.maxSpeedX);
             } else {
                 // Slower acceleration in air
-                this.rock.velocityX = Math.min(this.rock.velocityX + this.rock.acceleration * 0.5, this.rock.maxSpeedX);
+                this.rock.velocityX = Math.min(this.rock.velocityX + this.rock.acceleration * 0.5 * deltaMultiplier, this.rock.maxSpeedX);
             }
         }
 
-        // Apply gravity
-        this.rock.velocityY += this.physics.gravity;
+        // Apply gravity (delta time compensated)
+        this.rock.velocityY += this.physics.gravity * deltaMultiplier;
 
-        // Apply friction only when on ground and not pressing movement keys
+        // Apply friction only when on ground and not pressing movement keys (delta time compensated)
         if (this.rock.isGrounded && !this.keys.left && !this.keys.right) {
-            this.rock.velocityX *= this.rock.friction;
+            this.rock.velocityX *= Math.pow(this.rock.friction, deltaMultiplier);
             
             // Clear stop check - if below threshold, stop completely
             if (Math.abs(this.rock.velocityX) < this.physics.stopThreshold) {
@@ -530,20 +576,23 @@ class Game {
             }
         }
 
-        // Update position
-        this.rock.x += this.rock.velocityX;
-        this.rock.y += this.rock.velocityY;
+        // Update position (delta time compensated)
+        this.rock.x += this.rock.velocityX * deltaMultiplier;
+        this.rock.y += this.rock.velocityY * deltaMultiplier;
 
-        // Simplified rotation update - only rotate if we have meaningful velocity
+        // Simplified rotation update - only rotate if we have meaningful velocity (delta time compensated)
         if (Math.abs(this.rock.velocityX) >= this.physics.stopThreshold) {
             if (this.rock.isGrounded) {
                 this.rock.rotationVelocity = this.rock.velocityX * this.physics.rotationFactor;
             } else {
-                this.rock.rotationVelocity *= this.physics.rotationFriction;
+                this.rock.rotationVelocity *= Math.pow(this.physics.rotationFriction, deltaMultiplier);
             }
         } else {
             this.rock.rotationVelocity = 0;
         }
+        
+        // Update rotation (delta time compensated)
+        this.rock.rotation += this.rock.rotationVelocity * deltaMultiplier;
 
         // Ground collision handling
         if (this.rock.y + this.baseRadius > this.physics.groundY) {
@@ -625,9 +674,9 @@ class Game {
         // Update evolution particles if they exist
         if (this.evolutionParticles) {
             this.evolutionParticles = this.evolutionParticles.filter(particle => {
-                particle.x += particle.velocityX;
-                particle.y += particle.velocityY;
-                particle.life--;
+                particle.x += particle.velocityX * deltaMultiplier;
+                particle.y += particle.velocityY * deltaMultiplier;
+                particle.life -= deltaMultiplier;
                 return particle.life > 0;
             });
             
@@ -638,10 +687,10 @@ class Game {
 
         // Update star
         if (!this.star.collected) {
-            // Move star
-            this.star.x += this.star.velocityX;
-            this.star.y += this.star.velocityY;
-            this.star.rotation += 0.1;
+            // Move star (delta time compensated)
+            this.star.x += this.star.velocityX * deltaMultiplier;
+            this.star.y += this.star.velocityY * deltaMultiplier;
+            this.star.rotation += 0.1 * deltaMultiplier;
             
             // Bounce off walls and ground with sparkle effect
             if (this.star.x < 20 || this.star.x > this.levelBounds.width - 20) {
@@ -669,9 +718,9 @@ class Game {
                 this.star.trail.pop();
             }
             
-            // Update trail particles
+            // Update trail particles (delta time compensated)
             this.star.trail.forEach(particle => {
-                particle.life--;
+                particle.life -= deltaMultiplier;
                 particle.alpha = particle.life / 20;
             });
             this.star.trail = this.star.trail.filter(particle => particle.life > 0);
@@ -718,17 +767,17 @@ class Game {
 
         // Add to update method before other updates
         if (this.winScreen?.active) {
-            // Update win screen particles
+            // Update win screen particles (delta time compensated)
             this.winScreen.particles.forEach(particle => {
-                particle.x += particle.velocityX;
-                particle.y += particle.velocityY;
-                particle.life--;
+                particle.x += particle.velocityX * deltaMultiplier;
+                particle.y += particle.velocityY * deltaMultiplier;
+                particle.life -= deltaMultiplier;
             });
             
             this.winScreen.particles = this.winScreen.particles.filter(p => p.life > 0);
             
-            // Count down win screen timer
-            this.winScreen.timer--;
+            // Count down win screen timer (delta time compensated)
+            this.winScreen.timer -= deltaMultiplier;
             if (this.winScreen.timer <= 0) {
                 // Transition to next level or world
                 this.startNextLevel();
@@ -1148,7 +1197,7 @@ class Game {
             this.ctx.fillText('Game Over', this.canvas.width/2, this.canvas.height/2);
             
             this.ctx.font = '24px Arial';
-            this.ctx.fillText('Press SPACE to restart', this.canvas.width/2, this.canvas.height/2 + 50);
+            this.ctx.fillText('Press SPACE or tap to restart', this.canvas.width/2, this.canvas.height/2 + 50);
             
             this.ctx.textAlign = 'left'; // Reset text alignment
         }
@@ -1173,7 +1222,7 @@ class Game {
             
             if (this.winScreen.gameComplete) {
                 this.ctx.font = '24px Arial';
-                this.ctx.fillText('Press SPACE to play again', this.canvas.width/2, this.canvas.height/2 + 50);
+                this.ctx.fillText('Press SPACE or tap to play again', this.canvas.width/2, this.canvas.height/2 + 50);
             }
             
             this.ctx.textAlign = 'left'; // Reset text alignment
@@ -1182,9 +1231,9 @@ class Game {
         // Draw star effects (bounce particles)
         if (this.starEffects) {
             this.starEffects.forEach((particle, index) => {
-                particle.x += particle.velocityX;
-                particle.y += particle.velocityY;
-                particle.life--;
+                particle.x += particle.velocityX * deltaMultiplier;
+                particle.y += particle.velocityY * deltaMultiplier;
+                particle.life -= deltaMultiplier;
                 
                 const alpha = particle.life / 15;
                 this.ctx.fillStyle = `${particle.color}${Math.floor(alpha * 255).toString(16).padStart(2, '0')}`;
@@ -1199,9 +1248,9 @@ class Game {
         // Draw star collection particles with enhanced effects
         if (this.starCollectParticles) {
             this.starCollectParticles.forEach(particle => {
-                particle.x += particle.velocityX;
-                particle.y += particle.velocityY;
-                particle.life--;
+                particle.x += particle.velocityX * deltaMultiplier;
+                particle.y += particle.velocityY * deltaMultiplier;
+                particle.life -= deltaMultiplier;
                 particle.alpha = particle.life / (particle.isSparkle ? 90 : 60);
                 
                 if (particle.isSparkle) {
@@ -1715,11 +1764,11 @@ class Game {
                     miner.isAttacking = false;
                 }
             } else {
-                // Normal movement when not attacking
-                miner.x += miner.velocityX * miner.direction;
+                // Normal movement when not attacking (delta time compensated)
+                miner.x += miner.velocityX * miner.direction * deltaMultiplier;
                 
-                // Update walk animation
-                miner.walkAnimation += miner.walkSpeed;
+                // Update walk animation (delta time compensated)
+                miner.walkAnimation += miner.walkSpeed * deltaMultiplier;
                 
                 // Reverse direction randomly (no boundaries for infinite scrolling)
                 if (Math.random() < 0.01) {
