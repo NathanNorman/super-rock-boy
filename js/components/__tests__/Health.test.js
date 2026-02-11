@@ -10,8 +10,8 @@ describe('Health', () => {
     });
 
     test('initializes with correct default values', () => {
-        expect(health.maxHealth).toBe(100);
-        expect(health.currentHealth).toBe(100);
+        expect(health.max).toBe(100);
+        expect(health.current).toBe(100);
         expect(health.damageFlashTime).toBe(0);
         expect(health.isGameOver).toBe(false);
         expect(health.immunityFrames).toBe(0);
@@ -19,22 +19,22 @@ describe('Health', () => {
 
     test('takes damage correctly when not immune', () => {
         health.takeDamage(20);
-        expect(health.currentHealth).toBe(80);
+        expect(health.current).toBe(80);
         expect(health.damageFlashTime).toBe(10);
         expect(health.immunityFrames).toBe(30);
     });
 
     test('does not take damage during immunity frames', () => {
         health.takeDamage(20); // First hit
-        const healthAfterFirstHit = health.currentHealth;
+        const healthAfterFirstHit = health.current;
         health.takeDamage(20); // Should not register due to immunity
-        expect(health.currentHealth).toBe(healthAfterFirstHit);
+        expect(health.current).toBe(healthAfterFirstHit);
     });
 
     test('triggers game over when health reaches 0', () => {
         health.takeDamage(100);
         expect(health.isGameOver).toBe(true);
-        expect(health.currentHealth).toBeLessThanOrEqual(0);
+        expect(health.current).toBeLessThanOrEqual(0);
     });
 
     test('updates timers correctly', () => {
