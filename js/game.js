@@ -2353,6 +2353,8 @@ class Game {
     }
 }
 
+export default Game;
+
 // Start the game when the window loads
 window.onload = () => {
     try {
